@@ -1,0 +1,128 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+  <Import Project="..\..\DnSpyCommon.props" />
+
+  <PropertyGroup>
+    <AssemblyName>dnSpy.MCP.Server.x</AssemblyName>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>..\..\dnSpy.snk</AssemblyOriginatorKeyFile>
+    <OutputPath>..\..\dnSpy\dnSpy\bin\$(Configuration)\</OutputPath>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Contracts.DnSpy\dnSpy.Contracts.DnSpy.csproj" />
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Contracts.Logic\dnSpy.Contracts.Logic.csproj" />
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Contracts.Debugger\dnSpy.Contracts.Debugger.csproj" />
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Contracts.Debugger.DotNet\dnSpy.Contracts.Debugger.DotNet.csproj" />
+    <ProjectReference Include="..\..\dnSpy\dnSpy.Contracts.Debugger.DotNet.CorDebug\dnSpy.Contracts.Debugger.DotNet.CorDebug.csproj" />
+  </ItemGroup>
+
+  <!-- de4dot integration (deobfuscation engine) — DLLs bundled in libs/ -->
+  <!-- net48 build uses libs/de4dot/ (net48 DLLs) -->
+  <!-- net10 build uses libs/de4dot-net8/ (net8 DLLs, compatible with net10) -->
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net48' ">
+    <Reference Include="de4dot.code">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot\de4dot.code.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="de4dot.blocks">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot\de4dot.blocks.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="de4dot.mdecrypt">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot\de4dot.mdecrypt.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="de4dot.cui">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot\de4dot.cui.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="AssemblyData">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot\AssemblyData.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' != 'net48' ">
+    <Reference Include="de4dot.code">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.code.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="de4dot.blocks">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.blocks.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="de4dot.mdecrypt">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.mdecrypt.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="de4dot.cui">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.cui.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="AssemblyData">
+      <HintPath>$(MSBuildThisFileDirectory)libs\de4dot-net8\AssemblyData.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+    <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="$(MSVSTextVersion)" />
+    <PackageReference Include="ModelContextProtocol" Version="0.9.0-preview.2" />
+    <!-- Roslyn scripting — compile-time reference only; DLL already ships with dnSpy -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="5.0.0">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- For .NET Framework 4.8, we'll use a simpler HTTP listener approach -->
+  <ItemGroup Condition=" '$(IsDotNetFramework)' == 'true' ">
+    <PackageReference Include="Newtonsoft.Json" Version="$(NewtonsoftJsonVersion)" />
+  </ItemGroup>
+
+  <!-- Exclude backup, docs, and Sample directories from implicit SDK compile items -->
+  <ItemGroup>
+    <Compile Remove="backup\**\*.cs" />
+    <None Remove="backup\**\*.xaml" />
+    <Compile Remove="docs\**\*.cs" />
+    <None Remove="docs\**\*.xaml" />
+    <Compile Remove="Sample\**\*.cs" />
+    <None Remove="Sample\**\*.xaml" />
+    <Page Remove="Sample\**\*.xaml" />
+  </ItemGroup>
+
+  <!-- Config file deployed alongside the DLL — user edits are preserved on rebuild -->
+  <ItemGroup>
+    <None Update="mcp-config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Source files under src/ are discovered implicitly by the SDK.
+       Avoid explicitly adding <Compile Include="src\**\*.cs" /> to prevent duplicate
+       Compile items (see https://aka.ms/sdkimplicititems). -->
+
+  <!-- Exclude original root copies to avoid duplicate compile errors -->
+  <ItemGroup>
+    <Compile Remove="AssemblyTools.cs" />
+    <Compile Remove="BepInExResources.cs" />
+    <Compile Remove="CodeAnalysisHelpers.cs" />
+    <Compile Remove="McpInteropModels.cs" />
+    <Compile Remove="McpInteropTools.cs" />
+    <Compile Remove="McpOutput.cs" />
+    <Compile Remove="McpProtocol.cs" />
+    <Compile Remove="McpServer.cs" />
+    <Compile Remove="McpSettings.cs" />
+    <Compile Remove="McpSettingsControl.xaml.cs" />
+    <None Remove="McpSettingsControl.xaml" />
+    <Compile Remove="McpSettingsPage.cs" />
+    <Compile Remove="McpTools.cs" />
+    <Compile Remove="TheExtension.cs" />
+    <Compile Remove="ToolbarCommands.cs" />
+    <Compile Remove="TypeTools.cs" />
+    <Compile Remove="UsageFindingCommandTools.cs" />
+  </ItemGroup>
+
+</Project>
