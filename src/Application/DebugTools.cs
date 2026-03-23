@@ -199,16 +199,7 @@ namespace dnSpy.MCP.Server.Application {
 				string? rewrittenCondition = null;
 				List<string>? aliasNotes = null;
 				if (conditionExpr != null) {
-					var parameterNames = method.Parameters
-						.Where(p => p.IsNormalMethodParameter)
-						.OrderBy(p => p.MethodSigIndex)
-						.Select(p => p.Name)
-						.ToList();
-					var localIndexes = method.Body?.Variables
-						.Select(v => (int)v.Index)
-						.ToHashSet() ?? new HashSet<int>();
-					var aliasContext = DebuggerExpressionAliasContext.Create(method);
-					var rewrite = DebuggerExpressionAliasHelper.Rewrite(conditionExpr, parameterNames, localIndexes, aliasContext);
+					var rewrite = DebuggerExpressionAliasHelper.RewriteBreakpointCondition(conditionExpr, method);
 					if (rewrite.Error != null)
 						throw new ArgumentException(rewrite.Error);
 					rewrittenCondition = rewrite.RewrittenExpression;

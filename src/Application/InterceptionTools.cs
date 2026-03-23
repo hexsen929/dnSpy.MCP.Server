@@ -122,15 +122,7 @@ namespace dnSpy.MCP.Server.Application {
 
 			string? condition = GetString(arguments, "condition");
 			if (!string.IsNullOrWhiteSpace(condition)) {
-				string nonNullCondition = condition!;
-				var parameterNames = resolved.Method.Parameters
-					.Where(p => p.IsNormalMethodParameter)
-					.OrderBy(p => p.MethodSigIndex)
-					.Select(p => p.Name)
-					.ToList();
-				var localIndexes = resolved.Method.Body?.Variables.Select(v => (int) v.Index).ToHashSet() ?? new HashSet<int>();
-				var aliasContext = DebuggerExpressionAliasContext.Create(resolved.Method);
-				var rewrite = DebuggerExpressionAliasHelper.Rewrite(nonNullCondition, parameterNames, localIndexes, aliasContext);
+				var rewrite = DebuggerExpressionAliasHelper.RewriteBreakpointCondition(condition, resolved.Method);
 				if (rewrite.Error != null)
 					throw new ArgumentException(rewrite.Error);
 				settings.Condition = new DbgCodeBreakpointCondition(DbgCodeBreakpointConditionKind.IsTrue, rewrite.RewrittenExpression);

@@ -68,6 +68,40 @@ namespace dnSpy.MCP.Server.Application {
 			"unsafe","ushort","using","virtual","void","volatile","while"
 		};
 
+		public static bool ContainsAliasRootExpression(string? expression) {
+			if (string.IsNullOrWhiteSpace(expression))
+				return false;
+
+			return ArgAliasRegex.IsMatch(expression) ||
+				LocalAliasRegex.IsMatch(expression) ||
+				FieldAliasRegex.IsMatch(expression) ||
+				MemberByTokenRegex.IsMatch(expression);
+		}
+
+		public static AliasRewriteResult RewriteBreakpointCondition(string? expression, MethodDef method) {
+			if (method == null)
+				throw new ArgumentNullException(nameof(method));
+
+			var text = expression ?? string.Empty;
+			if (!ContainsAliasRootExpression(text)) {
+				return new AliasRewriteResult {
+					RewrittenExpression = text,
+					UsedAliases = false,
+				};
+			}
+
+			var parameterNames = method.Parameters
+				.Where(p => p.IsNormalMethodParameter)
+				.OrderBy(p => p.MethodSigIndex)
+				.Select(p => p.Name)
+				.ToList();
+			var localIndexes = method.Body?.Variables
+				.Select(v => (int)v.Index)
+				.ToHashSet() ?? new HashSet<int>();
+			var aliasContext = DebuggerExpressionAliasContext.Create(method);
+			return Rewrite(text, parameterNames, localIndexes, aliasContext);
+		}
+
 		public static AliasRewriteResult Rewrite(string expression, IReadOnlyList<string?> parameterNames, IReadOnlyCollection<int> localIndexes, DebuggerExpressionAliasContext? context = null) {
 			var result = new AliasRewriteResult {
 				RewrittenExpression = expression ?? string.Empty
