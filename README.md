@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.7.0 | **Tools**: 98 | **Status**: beta2 | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.0 | **Tools**: 100+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -16,10 +16,13 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
    - [Type & Member Tools](#type--member-tools)
    - [Method & Decompilation Tools](#method--decompilation-tools)
    - [IL Tools](#il-tools)
+   - [Control Flow Tools](#control-flow-tools)
    - [Analysis & Cross-Reference Tools](#analysis--cross-reference-tools)
    - [Edit Tools](#edit-tools)
    - [Embedded Resource Tools](#embedded-resource-tools)
    - [Debug Tools](#debug-tools)
+   - [SourceMap Tools](#sourcemap-tools)
+   - [Runtime Reversing Tools](#runtime-reversing-tools)
    - [Memory Dump & PE Tools](#memory-dump--pe-tools)
    - [Static PE Analysis](#static-pe-analysis)
    - [Deobfuscation Tools](#deobfuscation-tools)
@@ -37,21 +40,44 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
 
 ## Features
 
+### What Changed In 1.8.0
+
+- Streamable HTTP transport at `POST /mcp` is now the primary MCP surface
+- managed CIL control-flow analysis was added using Echo
+- HoLLy-inspired non-UI SourceMap support was added
+- runtime reversing support was expanded with native export resolution, Iced disassembly, patch tracking, PEB inspection, thread suspension, and DLL injection
+- persistent managed interception was added through `trace_method` and `hook_function`
+- tool discoverability now includes catalog metadata such as `category`, `hidden_by_default`, `is_legacy`, and `preferred_replacement`
+
 | Category | Capabilities |
 |----------|-------------|
 | **Assembly** | List loaded assemblies, namespaces, type counts, P/Invoke imports |
 | **Types** | Inspect types, fields, properties, events, nested types, attributes, inheritance |
 | **Decompilation** | Decompile entire types or individual methods to C# |
 | **IL** | View IL instructions, raw bytes, local variables, exception handlers |
+| **Control Flow** | Build managed CFGs and reduced basic-block views for CIL methods using Echo |
 | **Analysis** | Find callers/users, trace field reads/writes, call graphs, dead code, cross-assembly dependencies |
 | **Edit** | Rename members, change access modifiers, edit metadata, patch methods, inject types, save to disk |
 | **Resources** | List, read, add, remove embedded resources (ManifestResource table); extract Costura.Fody-embedded assemblies |
-| **Debug** | Manage breakpoints (with conditions), launch/attach processes, pause/resume/stop sessions, single-step (over/into/out), inspect call stacks, read locals, evaluate expressions |
+| **Debug** | Manage breakpoints (with alias-aware conditions), launch/attach processes, pause/resume/stop sessions, single-step (over/into/out), inspect call stacks, read locals, evaluate expressions |
+| **Interception** | Persistent managed tracing and breakpoint-backed interception with `trace_method` and `hook_function` |
+| **SourceMap** | Query, update, list, save, and load SourceMap entries without HoLLy UI |
+| **Runtime Reversing** | Resolve exports, disassemble native functions with Iced, patch/revert exports, inspect PEB, suspend/resume threads, inject native/managed DLLs |
 | **Memory Dump** | List runtime modules, dump .NET or native modules from memory, read/write process memory, extract PE sections |
 | **Static PE Analysis** | Scan raw PE bytes for strings; all-in-one ConfuserEx unpacker |
 | **Deobfuscation** | de4dot integration: detect obfuscator, rename mangled symbols, decrypt strings. Both in-process (`deobfuscate_assembly`) and external process (`run_de4dot`) modes available in all builds |
 | **Window / Dialog** | List active dialog/message-box windows (Win32 `#32770` + WPF) in the dnSpy process; dismiss them by clicking any button by name (supports EN and ES) |
 | **Search** | Glob and regex search across all loaded assemblies |
+
+### Echo Integration
+
+`dnSpy.MCP.Server` integrates only the stable managed subset of Echo:
+
+- `Echo.Core`
+- `Echo.ControlFlow`
+- `Echo.Platforms.Dnlib`
+
+The MCP server does **not** port HoLLy UI, MSAGL, AsmResolver backends, or symbolic execution. The Echo integration is limited to serializable CIL control-flow analysis that can be consumed reliably by MCP clients and LLMs.
 
 ---
 
@@ -120,7 +146,7 @@ dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release --no
 2. Verify it is running:
    ```bash
    curl http://localhost:3100/health
-   curl -N --max-time 3 http://localhost:3100/sse   # should print event: endpoint
+   curl -i -X POST http://localhost:3100/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"probe\",\"version\":\"1.0\"}}}"
    ```
 3. Configure your MCP client (see next section)
 
@@ -128,84 +154,46 @@ dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release --no
 
 ## Client Configuration
 
-The server implements the **MCP SSE transport** (spec version 2024-11-05). On connect the server sends an `event: endpoint` with the per-session POST URL; responses are pushed back over the SSE stream.
+The server now uses **MCP streamable HTTP** as the primary transport on `http://localhost:3100/mcp`.
 
-### Claude Code (CLI)
+### Transport Summary
+
+- `GET /health` returns a simple health payload
+- `POST /mcp` accepts JSON-RPC MCP requests
+- `initialize` returns the negotiated protocol version and a `Mcp-Session-Id` response header
+- subsequent `tools/list` and `tools/call` requests must include that `Mcp-Session-Id`
+
+### Generic MCP client configuration
+
+```json
+{
+  "mcpServers": {
+    "dnspy": {
+      "type": "http",
+      "url": "http://localhost:3100/mcp"
+    }
+  }
+}
+```
+
+### Minimal HTTP example
 
 ```bash
-claude mcp add dnspy --transport sse http://localhost:3100/sse
-```
-
-### Claude Desktop
-
-```json
-{
-  "mcpServers": {
-    "dnspy": {
-      "type": "sse",
-      "url": "http://localhost:3100/sse"
+curl -X POST http://localhost:3100/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": { "name": "example-client", "version": "1.0" }
     }
-  }
-}
+  }'
 ```
 
-### OpenCode
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "dnspy": {
-      "type": "remote",
-      "url": "http://localhost:3100/sse",
-      "enabled": true
-    }
-  }
-}
-```
-
-### Kilo Code / Roo Code
-
-```json
-{
-  "mcpServers": {
-    "dnspy-mcp": {
-      "type": "sse",
-      "url": "http://localhost:3100/sse",
-      "alwaysAllow": [
-        "list_assemblies", "list_tools", "search_types",
-        "get_type_info", "list_methods_in_type"
-      ],
-      "disabled": false
-    }
-  }
-}
-```
-
-### Codex CLI
-
-```json
-{
-  "mcpServers": {
-    "dnspy": {
-      "type": "sse",
-      "url": "http://localhost:3100/sse",
-      "timeout": 30
-    }
-  }
-}
-```
-
-### Gemini CLI
-
-```yaml
-mcpServers:
-  dnspy:
-    type: sse
-    url: http://localhost:3100/sse
-```
-
-> **SSE endpoints**: `GET /sse` (or `/events`, `/`) opens the event stream. The server immediately sends `event: endpoint\ndata: http://localhost:3100/message?sessionId=<id>`. The client then POSTs JSON-RPC requests to that URL and receives responses as `event: message` SSE events. `POST /` still accepts direct JSON-RPC for curl/scripting use.
+> Some MCP clients still label streamable HTTP as `http`, `streamable-http`, or `remote` depending on their config format. The endpoint is the same: `http://localhost:3100/mcp`.
 
 ---
 
@@ -320,6 +308,19 @@ Low-level IL inspection for a method body.
 | `output_path` | string | Optional path to save full JSON results to disk |
 | `max_methods` | integer | Max number of MethodDef tokens to scan (default `10000`) |
 | `include_bytes` | boolean | When `true`, include Base64-encoded IL bytes for each method (default `false`) |
+
+---
+
+### Control Flow Tools
+
+Serializable managed control-flow analysis for CIL methods using Echo over dnlib-backed method bodies.
+
+| Tool | Description | Required params | Optional params |
+|------|-------------|-----------------|-----------------|
+| `get_control_flow_graph` | Full CFG view with blocks, edges, entry block, and summary metrics | `assembly_name`, `type_full_name`, `method_name` | — |
+| `get_basic_blocks` | Reduced basic-block summary view intended for quick LLM consumption | `assembly_name`, `type_full_name`, `method_name` | — |
+
+> `get_basic_blocks` is intentionally the compact summary form of `get_control_flow_graph`.
 
 ---
 
@@ -478,11 +479,12 @@ Interact with dnSpy's integrated debugger. Most tools require an active debug se
 |------|-------------|-----------------|-----------------|
 | `get_debugger_state` | Current state: `IsDebugging`, `IsRunning`, process list with thread/runtime counts | — | — |
 | `list_breakpoints` | All registered code breakpoints with enabled state, bound count, and location | — | — |
-| `set_breakpoint` | Set a breakpoint at a method entry point or specific IL offset. Supports an optional C# `condition` expression — only fires when the expression evaluates to `true` | `assembly_name`, `type_full_name`, `method_name` | `il_offset`, `condition`, `file_path` |
+| `set_breakpoint` | Set a breakpoint at a method entry point or specific IL offset. Supports alias-aware conditions such as `$arg0`, `$local0`, `arg(0)`, `local(0)`, `field("Name")`, and `memberByToken("0x06001234")` | `assembly_name`, `type_full_name`, `method_name` | `il_offset`, `condition`, `file_path` |
+| `set_breakpoint_ex` | Extended compatibility alias of `set_breakpoint` with the same alias-aware condition support | `assembly_name`, `type_full_name`, `method_name` | `il_offset`, `condition`, `file_path` |
 | `remove_breakpoint` | Remove a specific breakpoint | `assembly_name`, `type_full_name`, `method_name` | `il_offset` |
 | `clear_all_breakpoints` | Remove every visible breakpoint | — | — |
 | `continue_debugger` | Resume all paused processes (`RunAll`) | — | — |
-| `break_debugger` | Pause all running processes (`BreakAll`) | — | — |
+| `break_debugger` | Pause all running processes (`BreakAll`). `safe_pause=true` uses dnSpy-managed pause only and never calls `Debugger.Break()` | — | `safe_pause` |
 | `stop_debugging` | Terminate all active debug sessions | — | — |
 | `get_call_stack` | Call stack of the currently selected (or first paused) thread — up to 50 frames | — | — |
 | `step_over` | Step over the current statement. Blocks until the step completes (or timeout). Returns the new execution location (token, IL offset, module). | — | `thread_id`, `process_id`, `timeout_seconds` |
@@ -495,13 +497,15 @@ Interact with dnSpy's integrated debugger. Most tools require an active debug se
 | `set_exception_breakpoint` | Break when a specific exception type is thrown. Configurable first-chance (before catch) and second-chance (unhandled). Default: first-chance enabled. | `exception_type` | `first_chance`, `second_chance`, `category` |
 | `remove_exception_breakpoint` | Remove an exception breakpoint for a specific exception type | `exception_type` | `category` |
 | `list_exception_breakpoints` | List all active exception breakpoints (those with at least one chance flag set) | — | — |
+| `batch_breakpoints` | Create multiple breakpoints in one call to reduce round-trips | `items` | — |
+| `get_method_by_token` | Resolve a method by metadata token and return signature, RVA, JIT/load-state hints, and native-address metadata when available | `assembly_name`, `token` | — |
 
 #### Parameter details
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `il_offset` | integer | IL byte offset within the method body (default `0` = method entry) |
-| `condition` | string | C# expression evaluated at each breakpoint hit — pauses only when `true` (e.g. `"i > 100"`, `"value != null"`) |
+| `condition` | string | C# expression evaluated at each breakpoint hit. Alias-aware forms include `$arg0`, `$local0`, `arg(0)`, `local(0)`, `field("Name")`, and `memberByToken("0x06001234")` |
 | `exe_path` | string | Absolute path to the EXE to launch |
 | `arguments` | string | Command-line arguments to pass to the process |
 | `working_directory` | string | Working directory for the launched process |
@@ -516,6 +520,47 @@ Interact with dnSpy's integrated debugger. Most tools require an active debug se
 > **Tip**: Use `start_debugging` + `break_kind: EntryPoint` for ConfuserEx-packed assemblies — method bodies are decrypted by the time the breakpoint hits. Then use `dump_module_from_memory` or `unpack_from_memory`.
 
 > **Step workflow**: `break_debugger` (or wait for a BP) → `get_current_location` → `step_over` / `step_into` → inspect with `get_local_variables` or `eval_expression` → repeat.
+
+---
+
+### SourceMap Tools
+
+SourceMap support ported from the useful non-UI parts of HoLLy. These tools keep naming data in the MCP cache without depending on HoLLy tabs or menus.
+
+| Tool | Description | Required params | Optional params |
+|------|-------------|-----------------|-----------------|
+| `get_source_map_name` | Resolve the current SourceMap name for a type or member | `assembly_name`, `type_full_name` | `member_kind`, `member_name` |
+| `set_source_map_name` | Set or update a SourceMap entry in the MCP cache | `assembly_name`, `type_full_name`, `mapped_name` | `member_kind`, `member_name` |
+| `list_source_map_entries` | List all cached SourceMap entries for an assembly | `assembly_name` | — |
+| `save_source_map` | Persist the current SourceMap cache for an assembly to disk | `assembly_name` | `output_path` |
+| `load_source_map` | Load a SourceMap XML file into the MCP cache | `assembly_name`, `input_path` | — |
+
+---
+
+### Runtime Reversing Tools
+
+Process-level reversing and persistent interception tools.
+
+| Tool | Description | Required params | Optional params |
+|------|-------------|-----------------|-----------------|
+| `get_proc_address` | Resolve an exported function address from a loaded module | `module`, `function` | `process_id` |
+| `patch_native_function` | Patch a native export in memory and optionally auto-wrap protection changes | `module`, `function` | `hex_bytes`, `bytes`, `bytes_base64`, `process_id`, `auto_virtual_protect` |
+| `revert_patch` | Revert a tracked patch by `patch_id` | `patch_id` | `auto_virtual_protect` |
+| `list_active_patches` | List tracked native patches created by the MCP server | — | — |
+| `disassemble_native_function` | Symbol-oriented native disassembly using Iced | `module`, `function` | `size`, `process_id` |
+| `read_native_memory` | Read native memory in `hex`, `ascii`, or `disasm` form | `address`, `size` | `format`, `process_id` |
+| `suspend_threads` | Freeze all or selected threads in the target process | — | `process_id`, `thread_ids` |
+| `resume_threads` | Resume only threads previously frozen through the MCP server | — | `process_id`, `thread_ids` |
+| `get_peb` | Best-effort read of PEB anti-debug fields | — | `process_id` |
+| `inject_native_dll` | Native DLL injection via `LoadLibraryW` and `CreateRemoteThread` | `dll_path` | `process_id` |
+| `inject_managed_dll` | Managed injection via CLR or Mono entrypoint invocation | `dll_path`, `type_name`, `method_name` | `argument`, `copy_to_temp`, `process_id` |
+| `trace_method` | Persistent managed tracing without pausing execution | `assembly_name`, `type_full_name`, `method_name` | `token`, `file_path`, `il_offset`, `condition`, `max_calls`, `max_log_entries` |
+| `hook_function` | Persistent managed interception with `break`, `log`, or `count` actions | `assembly_name`, `type_full_name`, `method_name` | `token`, `file_path`, `il_offset`, `condition`, `action`, `max_calls`, `max_log_entries` |
+| `list_active_interceptors` | Summary view of interceptor sessions | — | `include_inactive` |
+| `get_interceptor_log` | Detailed hit log for one interceptor session | `session_id` | — |
+| `remove_interceptor` | Remove an interceptor session and its underlying breakpoint | `session_id` | — |
+
+> `hook_function` intentionally rejects `modify_return` for now instead of exposing an unstable implementation.
 
 ---
 
@@ -835,9 +880,28 @@ To fetch the next page, pass the `nextCursor` value as the `cursor` argument in 
 
 ## Architecture
 
+### Design Principles
+
+- `dnSpy.MCP.Server` is an extension hosted inside dnSpy; it does not fork or embed a custom dnSpy tree
+- MCP features are implemented inside `dnSpy.MCP.Server` without patching dnSpy source
+- HoLLy-inspired functionality is ported only when it can be exposed as stable, serializable, non-UI MCP tools
+- Echo integration is limited to the stable managed CFG subset that can be serialized cleanly for LLMs
+
+### Catalog Metadata
+
+The tool catalog now exposes metadata intended to improve client-side discoverability:
+
+- `category`
+- `hidden_by_default`
+- `is_legacy`
+- `preferred_replacement`
+- `notes`
+
+`tools/list` hides tools marked `hidden_by_default` unless the client explicitly requests the full catalog. `list_tools` mirrors the same behavior and returns the same catalog metadata in-band.
+
 | File | Responsibility |
 |------|---------------|
-| `src/Communication/McpServer.cs` | HTTP/SSE listener, JSON-RPC dispatch |
+| `src/Communication/McpServer.cs` | Streamable HTTP listener and JSON-RPC dispatch |
 | `src/Application/McpTools.cs` | Central tool registry, schema definitions, routing |
 | `src/Application/AssemblyTools.cs` | Assembly/type listing, P/Invoke analysis |
 | `src/Application/TypeTools.cs` | Type detail, methods, IL, BFS path analysis |
@@ -880,7 +944,7 @@ dnSpy.MCP.Server/
     │   ├── WindowTools.cs           # Win32/WPF dialog management
     │   └── McpTools.cs              # Tool registry & routing
     ├── Communication/
-    │   └── McpServer.cs             # HTTP/SSE server
+    │   └── McpServer.cs             # streamable HTTP server
     ├── Contracts/
     │   └── McpProtocol.cs           # DTO types
     ├── Helper/
@@ -928,7 +992,7 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 > ```
 > netsh http add urlacl url=http://+:3100/ user=Everyone
 > ```
-> Then point your MCP client at `http://<dnspy-machine-ip>:3100/sse`.
+> Then point your MCP client at `http://<dnspy-machine-ip>:3100/mcp`.
 
 After editing `mcp-config.json`, call `reload_mcp_config` or restart dnSpy to apply the changes.
 
@@ -961,7 +1025,7 @@ netstat -ano | findstr :3100
 | `dump_module_from_memory` returns no bytes | Module has no address (pure dynamic) | Some in-memory modules emitted by reflection emit cannot be dumped |
 | Dump `IsFileLayout: false` | Memory layout dump | Use `dump_module_unpacked` instead — it performs the layout fix automatically |
 | `unpack_from_memory` fails with anti-debug error | Process kills itself before EntryPoint | Use `patch_method_to_ret` to neutralize anti-debug methods first, save the patched binary, then retry |
-| `Failed to reconnect` when adding MCP server | Wrong transport type | Use `--transport sse` with Claude Code CLI, not `streamable-http`. URL must point to `/sse` endpoint: `http://localhost:3100/sse` |
+| `Failed to connect` when adding MCP server | Wrong transport type or endpoint | Use the streamable HTTP endpoint `http://localhost:3100/mcp` and ensure the client is configured for HTTP/streamable HTTP, not SSE |
 | `dump_cordbg_il` returns E_NOINTERFACE errors | COM STA apartment threading | `ICorDebugModule` COM objects belong to the CorDebug engine thread; calling from another STA fails. This is a known limitation — use `dump_module_unpacked` instead for memory dumps. |
 | `Connection refused` from VM / sandbox | `host` is still `"localhost"` | Set `"host": "0.0.0.0"` in `mcp-config.json` and run `netsh http add urlacl url=http://+:3100/ user=Everyone` as Administrator. |
 | `Access denied` when binding to `0.0.0.0` | Missing URL ACL | Run `netsh http add urlacl url=http://+:3100/ user=Everyone` as Administrator (replace `3100` with your configured port). |

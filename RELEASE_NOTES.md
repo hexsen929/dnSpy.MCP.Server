@@ -2,6 +2,110 @@
 
 ---
 
+## v1.8.0 — 2026-03-23
+
+### New: Streamable HTTP Transport
+
+The server now uses streamable HTTP at `POST /mcp` as the primary MCP transport. Session-oriented requests use the `Mcp-Session-Id` header after `initialize`.
+
+### New: Echo-Based Managed Control-Flow Analysis
+
+The first stable Echo integration was added using only the managed serializable subset:
+
+| Tool | Description |
+|------|-------------|
+| `get_control_flow_graph` | Full CIL CFG view with blocks, edges, entry block, and summary metrics |
+| `get_basic_blocks` | Reduced basic-block summary view for quick LLM consumption |
+
+Integrated Echo components:
+- `Echo.Core`
+- `Echo.ControlFlow`
+- `Echo.Platforms.Dnlib`
+
+Not included:
+- HoLLy UI
+- MSAGL
+- AsmResolver backends
+- symbolic execution
+- native CFG
+
+### New: SourceMap Support Without HoLLy UI
+
+The useful non-UI SourceMap functionality was ported into dedicated MCP tools:
+
+| Tool | Description |
+|------|-------------|
+| `get_source_map_name` | Resolve the current SourceMap name for a type or member |
+| `set_source_map_name` | Set or update a SourceMap entry |
+| `list_source_map_entries` | List cached SourceMap entries for an assembly |
+| `save_source_map` | Persist SourceMap cache to disk |
+| `load_source_map` | Load SourceMap XML into the MCP cache |
+
+### New: Runtime Reversing And Interception
+
+Runtime and native reversing support was expanded substantially:
+
+| Tool | Description |
+|------|-------------|
+| `get_proc_address` | Resolve loaded native export addresses |
+| `patch_native_function` | Patch native exports in memory with optional `VirtualProtect` handling |
+| `revert_patch` | Revert tracked native patches |
+| `list_active_patches` | List tracked runtime patches |
+| `disassemble_native_function` | Disassemble exports directly from process memory using Iced |
+| `read_native_memory` | Read memory in `hex`, `ascii`, or `disasm` form |
+| `suspend_threads` | Freeze all or selected threads |
+| `resume_threads` | Resume only threads previously frozen through MCP |
+| `get_peb` | Read best-effort PEB anti-debug fields |
+| `inject_native_dll` | Native DLL injection via `LoadLibraryW` |
+| `inject_managed_dll` | Managed DLL injection via CLR or Mono entrypoint invocation |
+| `trace_method` | Persistent managed tracing without pausing execution |
+| `hook_function` | Persistent managed interception with `break`, `log`, or `count` actions |
+| `list_active_interceptors` | Summary list of interceptor sessions |
+| `get_interceptor_log` | Retrieve per-session hit logs |
+| `remove_interceptor` | Remove a session and its underlying breakpoint |
+
+`hook_function` intentionally rejects `modify_return` for now with a clear error instead of exposing an unstable implementation.
+
+### New: Alias-Aware Debugger Expressions
+
+Debugger expressions and breakpoint conditions now support safer aliases for obfuscated or hostile symbol names:
+
+- `$arg0`, `$arg1`, ...
+- `$local0`, `$local1`, ...
+- `arg(0)`, `local(0)`
+- `field("Name")`
+- `memberByToken("0x06001234")`
+
+This support is wired into:
+- `eval_expression`
+- `eval_expression_ex`
+- `set_breakpoint`
+- `set_breakpoint_ex`
+- persistent interceptor conditions
+
+### New: Tool Catalog Rationalization
+
+The tool catalog now carries per-tool metadata:
+
+- `category`
+- `hidden_by_default`
+- `is_legacy`
+- `preferred_replacement`
+- `notes`
+
+This reduces default discoverability noise without breaking `tools/call` compatibility.
+
+### Compatibility Notes
+
+- `list_assembly_attributes` is now treated as a legacy compatibility view; prefer `get_assembly_metadata`
+- `deobfuscate_assembly` remains for compatibility, but `run_de4dot` is the preferred deobfuscation entry point
+- `get_basic_blocks` remains intentionally as the reduced summary form of `get_control_flow_graph`
+- the failed `feature/mcp-phase-batch-1` line was retired instead of repaired
+
+### Total tools: **100+**
+
+---
+
 ## v1.6.0 — 2026-02-27
 
 ### New: Active Debug Stepping, Expression Evaluation & Memory Patching
