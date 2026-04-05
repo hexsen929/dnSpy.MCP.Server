@@ -23,7 +23,6 @@ using System.ComponentModel.Composition;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -34,6 +33,7 @@ using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using ReflectionBindingFlags = System.Reflection.BindingFlags;
 
 namespace dnSpy.MCP.Server.Application {
 	/// <summary>
@@ -247,8 +247,8 @@ namespace dnSpy.MCP.Server.Application {
 		void EnsureEditableMethod(MethodDef method) {
 			if (method.HasImplMap) {
 				method.ImplMap = null;
-				method.Attributes &= ~MethodAttributes.PinvokeImpl;
-				method.ImplAttributes = MethodImplAttributes.IL | MethodImplAttributes.Managed;
+				method.Attributes &= ~dnlib.DotNet.MethodAttributes.PinvokeImpl;
+				method.ImplAttributes = dnlib.DotNet.MethodImplAttributes.IL | dnlib.DotNet.MethodImplAttributes.Managed;
 			}
 
 			if (method.Body == null)
@@ -516,9 +516,9 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			if (HasParamArrayAttribute(parameter))
 				return "params ";
 			if (parameter.Type is ByRefSig) {
-				if (parameter.IsOut)
+				if (parameter.ParamDef?.IsOut == true)
 					return "out ";
-				if (parameter.IsIn)
+				if (parameter.ParamDef?.IsIn == true)
 					return "in ";
 				return "ref ";
 			}
@@ -614,7 +614,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			catch {
 			}
 
-			return paths.Select(MetadataReference.CreateFromFile).ToList();
+			return paths.Select(path => MetadataReference.CreateFromFile(path)).ToList();
 		}
 
 		CilBody CloneMethodBodyIntoTarget(TypeDef sourceType, MethodDef sourceMethod, TypeDef targetType, MethodDef targetMethod) {
@@ -624,7 +624,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			var context = new PatchImportContext(sourceType, targetType, sourceMethod, targetMethod);
 			var importer = new Importer(targetMethod.Module, ImporterOptions.TryToUseTypeDefs | ImporterOptions.TryToUseMethodDefs | ImporterOptions.TryToUseFieldDefs);
 			var sourceBody = sourceMethod.Body;
-			var targetBody = new CilBody(sourceBody.InitLocals, new List<Instruction>(), new List<ExceptionHandler>()) {
+			var targetBody = new CilBody(sourceBody.InitLocals, new List<Instruction>(), new List<ExceptionHandler>(), new List<Local>()) {
 				MaxStack = sourceBody.MaxStack,
 				KeepOldMaxStack = sourceBody.KeepOldMaxStack
 			};
@@ -933,7 +933,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 
 			var opName = match.Groups["opcode"].Value.Trim();
 			var normalized = opName.Replace(".", "_");
-			var field = typeof(OpCodes).GetField(normalized, BindingFlags.Public | BindingFlags.Static | BindingFlags.IgnoreCase);
+			var field = typeof(OpCodes).GetField(normalized, ReflectionBindingFlags.Public | ReflectionBindingFlags.Static | ReflectionBindingFlags.IgnoreCase);
 			if (field == null)
 				throw new ArgumentException($"Unknown OpCode '{opName}' on line {index}.");
 
@@ -1195,7 +1195,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 
 			var reflectionType = Type.GetType(typeName, throwOnError: false);
 			if (reflectionType != null) {
-				var methods = reflectionType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)
+				var methods = reflectionType.GetMethods(ReflectionBindingFlags.Public | ReflectionBindingFlags.NonPublic | ReflectionBindingFlags.Static | ReflectionBindingFlags.Instance)
 					.Where(m => string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase))
 					.ToList();
 				var selected = methods.FirstOrDefault(m => ParametersMatch(m.GetParameters().Select(p => NormalizeTypeName(p.ParameterType.FullName ?? p.ParameterType.Name)).ToArray(), parameterSpecs))
@@ -1226,7 +1226,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 
 			var reflectionType = Type.GetType(typeName, throwOnError: false);
 			if (reflectionType != null) {
-				var field = reflectionType.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+				var field = reflectionType.GetField(fieldName, ReflectionBindingFlags.Public | ReflectionBindingFlags.NonPublic | ReflectionBindingFlags.Static | ReflectionBindingFlags.Instance);
 				if (field != null)
 					return targetModule.Import(field);
 			}
@@ -1244,7 +1244,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 
 		static string GetParameterModifier(Parameter parameter) {
 			if (parameter.Type is ByRefSig)
-				return parameter.IsOut ? "out " : "ref ";
+				return parameter.ParamDef?.IsOut == true ? "out " : "ref ";
 			return string.Empty;
 		}
 
@@ -1272,7 +1272,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			if (type is SZArraySig szArraySig)
 				return $"{ToCSharpTypeName(szArraySig.Next, contextMethod)}[]";
 			if (type is ArraySig arraySig)
-				return $"{ToCSharpTypeName(arraySig.Next, contextMethod)}[{new string(',', Math.Max(0, arraySig.Rank - 1))}]";
+				return $"{ToCSharpTypeName(arraySig.Next, contextMethod)}[{new string(',', Math.Max(0, (int)arraySig.Rank - 1))}]";
 			if (type is PtrSig ptrSig)
 				return $"{ToCSharpTypeName(ptrSig.Next, contextMethod)}*";
 			if (type is GenericVar genericVar)
