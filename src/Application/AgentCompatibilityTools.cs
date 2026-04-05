@@ -910,8 +910,9 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 				var placeholder = Instruction.Create(OpCodes.Nop);
 				instructions.Add(placeholder);
 				if (!string.IsNullOrWhiteSpace(spec.Label)) {
-					if (!labelMap.TryAdd(spec.Label!, placeholder))
+					if (labelMap.ContainsKey(spec.Label!))
 						throw new ArgumentException($"Duplicate label '{spec.Label}'.");
+					labelMap[spec.Label!] = placeholder;
 				}
 			}
 
@@ -1343,7 +1344,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 				return string.Empty;
 
 			value = value
-				.Replace("global::", string.Empty, StringComparison.Ordinal)
+				.Replace("global::", string.Empty)
 				.Replace("/", ".")
 				.Replace("+", ".")
 				.Replace(" ", string.Empty);
