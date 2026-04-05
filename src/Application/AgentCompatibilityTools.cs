@@ -1340,27 +1340,27 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			if (string.IsNullOrEmpty(value))
 				return string.Empty;
 
-			return value
-				.Replace("global::", string.Empty, StringComparison.Ordinal)
-				.Replace("/", ".")
-				.Replace("+", ".")
-				.Replace(" ", string.Empty)
-				ReplaceTypeAlias("bool", "System.Boolean")
-				ReplaceTypeAlias("byte", "System.Byte")
-				ReplaceTypeAlias("sbyte", "System.SByte")
-				ReplaceTypeAlias("short", "System.Int16")
-				ReplaceTypeAlias("ushort", "System.UInt16")
-				ReplaceTypeAlias("int", "System.Int32")
-				ReplaceTypeAlias("uint", "System.UInt32")
-				ReplaceTypeAlias("long", "System.Int64")
-				ReplaceTypeAlias("ulong", "System.UInt64")
-				ReplaceTypeAlias("float", "System.Single")
-				ReplaceTypeAlias("double", "System.Double")
-				ReplaceTypeAlias("string", "System.String")
-				ReplaceTypeAlias("object", "System.Object")
-				ReplaceTypeAlias("char", "System.Char")
-				ReplaceTypeAlias("void", "System.Void")
-				.ToLowerInvariant();
+				return value
+					.Replace("global::", string.Empty, StringComparison.Ordinal)
+					.Replace("/", ".")
+					.Replace("+", ".")
+					.Replace(" ", string.Empty)
+					.ReplaceTypeAlias("bool", "System.Boolean")
+					.ReplaceTypeAlias("byte", "System.Byte")
+					.ReplaceTypeAlias("sbyte", "System.SByte")
+					.ReplaceTypeAlias("short", "System.Int16")
+					.ReplaceTypeAlias("ushort", "System.UInt16")
+					.ReplaceTypeAlias("int", "System.Int32")
+					.ReplaceTypeAlias("uint", "System.UInt32")
+					.ReplaceTypeAlias("long", "System.Int64")
+					.ReplaceTypeAlias("ulong", "System.UInt64")
+					.ReplaceTypeAlias("float", "System.Single")
+					.ReplaceTypeAlias("double", "System.Double")
+					.ReplaceTypeAlias("string", "System.String")
+					.ReplaceTypeAlias("object", "System.Object")
+					.ReplaceTypeAlias("char", "System.Char")
+					.ReplaceTypeAlias("void", "System.Void")
+					.ToLowerInvariant();
 		}
 
 		static string ReplaceTypeAlias(this string input, string alias, string fullName) =>
