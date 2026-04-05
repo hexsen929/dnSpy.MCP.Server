@@ -76,7 +76,28 @@ jobs:
           $outDir = $dll.Directory.FullName
           $artifactDir = Join-Path $PWD "release-assets/${{ matrix.target_framework }}"
           New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
-          Copy-Item (Join-Path $outDir '*') $artifactDir -Recurse -Force
+
+          $includePatterns = @(
+            'dnSpy.MCP.Server.x.dll',
+            'dnSpy.MCP.Server.x.pdb',
+            'mcp-config.json',
+            'AssemblyData.dll',
+            'de4dot*.dll',
+            'Echo*.dll',
+            'Echo*.pdb',
+            'Echo*.xml'
+          )
+
+          foreach ($pattern in $includePatterns) {
+            Get-ChildItem -Path $outDir -Filter $pattern -File -ErrorAction SilentlyContinue |
+              Copy-Item -Destination $artifactDir -Force
+          }
+
+          @"
+          Copy these files into dnSpy's bin folder.
+          This package intentionally excludes dnSpy host binaries and broad transitive dependencies.
+          Do not overwrite dnSpy.exe.config or replace the whole dnSpy directory with this zip.
+          "@ | Set-Content -Path (Join-Path $artifactDir 'INSTALL.txt') -Encoding UTF8
 
           $zipPath = Join-Path $PWD "release-assets/dnSpy.MCP.Server-${{ matrix.target_framework }}.zip"
           if (Test-Path $zipPath) {

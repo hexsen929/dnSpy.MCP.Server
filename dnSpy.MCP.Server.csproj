@@ -9,9 +9,8 @@
     <OutputPath>..\..\dnSpy\dnSpy\bin\$(Configuration)\</OutputPath>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
-    <!-- NU1903 is currently transitively introduced by ModelContextProtocol.Core 0.9.0-preview.2.
-         CS8002 comes from local Echo project references that are not strong-named. -->
-    <NoWarn>$(NoWarn);NU1903;CS8002</NoWarn>
+    <!-- CS8002 comes from local Echo project references that are not strong-named. -->
+    <NoWarn>$(NoWarn);CS8002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -57,9 +56,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
     <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="$(MSVSTextVersion)" />
-    <PackageReference Include="ModelContextProtocol" Version="0.9.0-preview.2" />
     <PackageReference Include="Iced" Version="$(IcedVersion)" />
     <!-- Roslyn scripting — compile-time reference only; DLL already ships with dnSpy -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="5.0.0">
@@ -67,9 +64,11 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- For .NET Framework 4.8, we'll use a simpler HTTP listener approach -->
+  <!-- For .NET Framework 4.8, keep the transport stack minimal and avoid
+       pulling modern MCP/Hosting runtime packages into dnSpyEx's AppDomain. -->
   <ItemGroup Condition=" '$(IsDotNetFramework)' == 'true' ">
     <PackageReference Include="Newtonsoft.Json" Version="$(NewtonsoftJsonVersion)" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <!-- Exclude backup, docs, and Sample directories from implicit SDK compile items -->

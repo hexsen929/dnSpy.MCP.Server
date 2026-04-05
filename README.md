@@ -132,6 +132,7 @@ dotnet clean Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj
 | .NET Framework 4.8 | `dnSpy/dnSpy/bin/Release/net48/dnSpy.MCP.Server.x.dll` |
 
 > The MCP Server DLL is output directly into dnSpy's bin directory so it loads automatically when you start dnSpy.
+> GitHub Actions release/build artifacts are packaged as a **plugin-only bundle**: copy the zip contents into dnSpy's `bin` directory, but **do not** replace the whole dnSpy folder or overwrite `dnSpy.exe.config`.
 
 ### Verify the build
 
