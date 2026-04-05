@@ -912,7 +912,7 @@ namespace dnSpy.MCP.Server.Application
             },
             new ToolInfo {
                 Name = "set_function_opcodes",
-                Description = "Insert or overwrite IL instructions at a given method line index. Supports basic literals, strings, method refs, field refs, type refs, args, and locals. Branch/switch targets are not yet supported.",
+                Description = "Insert or overwrite IL instructions at a given method line index. Supports literals, strings, method refs, field refs, type refs, args, locals, labels, branch targets, and switch targets. Branch targets can reference labels in the new block or original instructions via line:<index> / IL_<offset>.",
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
@@ -923,7 +923,7 @@ namespace dnSpy.MCP.Server.Application
                         ["method_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Method name to modify" },
                         ["method_token"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional metadata token (hex or decimal) to disambiguate overloads" },
                         ["parameter_count"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional overload disambiguator: number of normal method parameters" },
-                        ["il_opcodes"] = new Dictionary<string, object> { ["type"] = "array", ["description"] = "Array of opcode lines such as 'Ldstr Hello' or 'Call System.Console::WriteLine(System.String)'" },
+                        ["il_opcodes"] = new Dictionary<string, object> { ["type"] = "array", ["description"] = "Array of opcode lines such as 'Ldstr Hello', 'loop: br.s loop', or 'switch case0, case1, IL_0010'" },
                         ["il_line_number"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "0-based instruction index where the splice should occur" },
                         ["mode"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "append, insert, or overwrite (default append)" }
                     },
@@ -950,7 +950,7 @@ namespace dnSpy.MCP.Server.Application
             },
             new ToolInfo {
                 Name = "update_method_sourcecode",
-                Description = "Compile a replacement method body from C# statements and swap the target method's IL in-memory. Best for quick body patches that mostly depend on parameters and framework APIs.",
+                Description = "Compile a replacement method body from C# statements and swap the target method's IL in-memory. The generated wrapper now includes same-type field/property/event/method stubs so body patches can reference more instance members directly.",
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
@@ -2101,13 +2101,13 @@ namespace dnSpy.MCP.Server.Application
                 metadata.Notes = "AgentSmithers-style IL listing with stable line indexes that pair with set_function_opcodes.";
                 break;
             case "set_function_opcodes":
-                metadata.Notes = "Direct IL splicing workflow. Best for targeted edits when patch_method_to_ret is too coarse.";
+                metadata.Notes = "Direct IL splicing workflow. Supports labels plus branch/switch targets to new or surviving original instructions.";
                 break;
             case "overwrite_full_function_opcodes":
                 metadata.Notes = "Full method-body IL replacement. Prefer set_function_opcodes for smaller edits.";
                 break;
             case "update_method_sourcecode":
-                metadata.Notes = "Direct source-body patch workflow. Works best for self-contained bodies that mostly depend on parameters and framework APIs.";
+                metadata.Notes = "Direct source-body patch workflow. The generated wrapper includes same-type member skeletons so patches can reference more fields, properties, events, and helper methods directly.";
                 break;
             case "list_tools":
                 metadata.Notes = "Default mode hides tools marked hidden_by_default. Use mode='full' or include_hidden=true for the complete catalog.";

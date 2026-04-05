@@ -45,7 +45,7 @@ namespace dnSpy.MCP.Server.Application {
 		readonly IDecompilerService decompilerService;
 
 		static readonly JsonSerializerOptions PrettyJson = new JsonSerializerOptions { WriteIndented = true };
-		static readonly Regex opcodeLineRegex = new Regex(@"^\s*(?<opcode>\S+)(?:\s+(?<operand>.+))?$", RegexOptions.Compiled);
+		static readonly Regex opcodeLineRegex = new Regex(@"^\s*(?:(?<label>[A-Za-z_][\w]*)\s*:\s*)?(?<opcode>\S+)(?:\s+(?<operand>.+))?$", RegexOptions.Compiled);
 		static readonly Regex methodSpecRegex = new Regex(@"^(?<type>.+?)::(?<method>[^\(\s]+)(?:\((?<params>.*)\))?$", RegexOptions.Compiled);
 		static readonly Regex fieldSpecRegex = new Regex(@"^(?<type>.+?)::(?<field>[^\s]+)$", RegexOptions.Compiled);
 
@@ -141,7 +141,7 @@ namespace dnSpy.MCP.Server.Application {
 				}
 
 				var oldInstructionCount = method.Body?.Instructions.Count ?? 0;
-				var importedBody = CloneMethodBodyIntoTarget(compileResult.CompiledMethod, method);
+				var importedBody = CloneMethodBodyIntoTarget(compileResult.CompiledType!, compileResult.CompiledMethod!, type, method);
 				method.Body = importedBody;
 				RefreshTree();
 
@@ -177,11 +177,15 @@ namespace dnSpy.MCP.Server.Application {
 				EnsureEditableMethod(method);
 				var body = method.Body ?? new CilBody();
 				method.Body = body;
-				var parsedInstructions = ParseInstructionLines(method, ilOpcodes);
-
 				var existingCount = body.Instructions.Count;
 				if (!replaceAll && (lineNumber < 0 || lineNumber > existingCount))
 					throw new ArgumentException($"il_line_number {lineNumber} is out of range. Valid range is 0-{existingCount}.");
+
+				var allowOriginalInstructionTargets = !replaceAll;
+				var originalInstructions = body.Instructions.ToList();
+				var parsedInstructions = ParseInstructionLines(method, ilOpcodes, originalInstructions, allowOriginalInstructionTargets);
+				var removedOriginalTargets = GetRemovedOriginalInstructions(mode, lineNumber, originalInstructions, parsedInstructions.Count);
+				EnsureReferencedInstructionsRemain(parsedInstructions, removedOriginalTargets);
 
 				switch (mode) {
 				case "append":
@@ -198,6 +202,7 @@ namespace dnSpy.MCP.Server.Application {
 					break;
 
 				case "replace_all":
+					body.ExceptionHandlers.Clear();
 					body.Instructions.Clear();
 					foreach (var instruction in parsedInstructions)
 						body.Instructions.Add(instruction);
@@ -229,6 +234,8 @@ namespace dnSpy.MCP.Server.Application {
 		}
 
 		void EnsureSourcePatchIsSupported(TypeDef type, MethodDef method) {
+			if (type.IsInterface || type.IsEnum)
+				throw new ArgumentException("update_method_sourcecode only supports class and struct types.");
 			if (type.DeclaringType != null)
 				throw new ArgumentException("update_method_sourcecode does not yet support nested types.");
 			if (type.HasGenericParameters)
@@ -305,33 +312,246 @@ namespace dnSpy.MCP.Server.Application {
 		}
 
 		string BuildWrapperSource(TypeDef type, MethodDef method, string bodySnippet) {
-			var typeKeyword = type.IsValueType && !type.IsEnum ? "struct" : "class";
-			var staticKeyword = method.IsStatic ? " static" : string.Empty;
 			var namespaceLine = string.IsNullOrWhiteSpace(type.Namespace) ? string.Empty : $"namespace {type.Namespace}\n{{\n";
 			var namespaceClose = string.IsNullOrWhiteSpace(type.Namespace) ? string.Empty : "}\n";
-			var parameterList = string.Join(", ",
-				method.Parameters
-					.Where(p => p.IsNormalMethodParameter)
-					.Select((p, index) => $"{GetParameterModifier(p)}{ToCSharpTypeName(p.Type, method)} {SanitizeIdentifier(string.IsNullOrWhiteSpace(p.Name) ? $"arg{index}" : p.Name!)}"));
-
 			var indent = string.IsNullOrWhiteSpace(type.Namespace) ? string.Empty : "\t";
-			var bodyLines = string.Join(Environment.NewLine,
-				bodySnippet.Replace("\r\n", "\n").Split('\n').Select(line => indent + "\t\t" + line));
+			var members = new List<string>();
+
+			foreach (var field in type.Fields) {
+				var declaration = BuildFieldDeclaration(field, method);
+				if (!string.IsNullOrWhiteSpace(declaration))
+					members.Add(IndentBlock(declaration!, indent + "\t"));
+			}
+
+			foreach (var evt in type.Events) {
+				var declaration = BuildEventDeclaration(evt, method);
+				if (!string.IsNullOrWhiteSpace(declaration))
+					members.Add(IndentBlock(declaration!, indent + "\t"));
+			}
+
+			foreach (var property in type.Properties) {
+				var declaration = BuildPropertyDeclaration(property, method);
+				if (!string.IsNullOrWhiteSpace(declaration))
+					members.Add(IndentBlock(declaration!, indent + "\t"));
+			}
+
+			foreach (var ctor in type.Methods.Where(m => m.IsConstructor)) {
+				var declaration = BuildConstructorDeclaration(type, ctor);
+				if (!string.IsNullOrWhiteSpace(declaration))
+					members.Add(IndentBlock(declaration!, indent + "\t"));
+			}
+
+			foreach (var helperMethod in type.Methods.Where(ShouldEmitMethodStub)) {
+				var declaration = BuildMethodStubDeclaration(helperMethod);
+				if (!string.IsNullOrWhiteSpace(declaration))
+					members.Add(IndentBlock(declaration!, indent + "\t"));
+			}
+
+			members.Add(IndentBlock(BuildPatchMethodDeclaration(method, bodySnippet), indent + "\t"));
+			var memberText = members.Count == 0
+				? string.Empty
+				: string.Join(Environment.NewLine + Environment.NewLine, members) + Environment.NewLine;
 
 			return
 $@"using System;
 using System.Linq;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
-{namespaceLine}{indent}public {typeKeyword} {type.Name}
+using System.Threading;
+using System.Threading.Tasks;
+{namespaceLine}{indent}{GetTypeDeclarationPrefix(type)} {GetTypeKeyword(type)} {EscapeIdentifier(type.Name.String)}{BuildBaseTypeClause(type, method)}
 {indent}{{
-{indent}\tpublic{staticKeyword} {ToCSharpTypeName(method.ReturnType, method)} __mcp_patch({parameterList})
-{indent}\t{{
-{bodyLines}
-{indent}\t}}
-{indent}}}
+{memberText}{indent}}}
 {namespaceClose}";
 		}
+
+		static string GetTypeDeclarationPrefix(TypeDef type) {
+			if (type.IsAbstract && type.IsSealed && !type.IsValueType)
+				return "public static unsafe";
+			return "public unsafe";
+		}
+
+		static string GetTypeKeyword(TypeDef type) =>
+			type.IsValueType && !type.IsEnum ? "struct" : "class";
+
+		string BuildBaseTypeClause(TypeDef type, MethodDef contextMethod) {
+			var entries = new List<string>();
+			if (!type.IsValueType && type.BaseType != null && NormalizeTypeName(type.BaseType.FullName) != NormalizeTypeName("System.Object"))
+				entries.Add(ToCSharpTypeName(type.BaseType.ToTypeSig(), contextMethod));
+
+			foreach (var iface in type.Interfaces) {
+				if (iface.Interface != null)
+					entries.Add(ToCSharpTypeName(iface.Interface.ToTypeSig(), contextMethod));
+			}
+
+			return entries.Count == 0 ? string.Empty : " : " + string.Join(", ", entries.Distinct(StringComparer.Ordinal));
+		}
+
+		static string IndentBlock(string block, string indent) =>
+			string.Join(Environment.NewLine,
+				block.Replace("\r\n", "\n").Split('\n').Select(line => line.Length == 0 ? string.Empty : indent + line));
+
+		string? BuildFieldDeclaration(FieldDef field, MethodDef contextMethod) {
+			if (!CanEmitSimpleMemberName(field.Name.String))
+				return null;
+
+			var modifiers = new List<string> { "public" };
+			if (field.IsStatic)
+				modifiers.Add("static");
+			if (field.IsInitOnly || field.IsLiteral)
+				modifiers.Add("readonly");
+
+			return $"{string.Join(" ", modifiers)} {ToCSharpTypeName(field.FieldType, contextMethod)} {EscapeIdentifier(field.Name.String)};";
+		}
+
+		string? BuildEventDeclaration(EventDef evt, MethodDef contextMethod) {
+			var accessor = evt.AddMethod ?? evt.RemoveMethod ?? evt.InvokeMethod;
+			if (accessor == null || evt.EventType == null || !CanEmitSimpleMemberName(evt.Name.String))
+				return null;
+
+			return
+$@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.EventType.ToTypeSig(), contextMethod)} {EscapeIdentifier(evt.Name.String)}
+{{
+	add {{ }}
+	remove {{ }}
+}}";
+		}
+
+		string? BuildPropertyDeclaration(PropertyDef property, MethodDef contextMethod) {
+			if (property.PropertySig == null)
+				return null;
+			if (property.PropertySig.RetType is ByRefSig)
+				return null;
+
+			var accessor = property.GetMethod ?? property.SetMethod;
+			if (accessor == null)
+				return null;
+
+			var propertyName = BuildPropertyName(property, contextMethod);
+			if (string.IsNullOrWhiteSpace(propertyName))
+				return null;
+
+			var lines = new List<string> {
+				$"public{(accessor.IsStatic ? " static" : string.Empty)} {GetReturnTypeDeclaration(property.PropertySig.RetType, contextMethod)} {propertyName}",
+				"{"
+			};
+			if (property.GetMethod != null)
+				lines.Add("\tget { throw new global::System.NotSupportedException(); }");
+			if (property.SetMethod != null)
+				lines.Add("\tset { }");
+			lines.Add("}");
+			return string.Join(Environment.NewLine, lines);
+		}
+
+		string? BuildPropertyName(PropertyDef property, MethodDef contextMethod) {
+			var paramCount = property.PropertySig?.Params.Count ?? 0;
+			if (paramCount == 0) {
+				if (!CanEmitSimpleMemberName(property.Name.String))
+					return null;
+				return EscapeIdentifier(property.Name.String);
+			}
+
+			if (!string.Equals(property.Name.String, "Item", StringComparison.Ordinal) || property.PropertySig == null)
+				return null;
+
+			var parameterList = string.Join(", ", property.PropertySig.Params.Select((param, index) =>
+				$"{ToCSharpTypeName(param, contextMethod)} {SanitizeIdentifier($"index{index}")}"));
+			return $"this[{parameterList}]";
+		}
+
+		string? BuildConstructorDeclaration(TypeDef type, MethodDef ctor) {
+			if (!ctor.IsConstructor)
+				return null;
+			if (!ctor.IsStatic && type.IsValueType && ctor.Parameters.Count(p => p.IsNormalMethodParameter) == 0)
+				return null;
+
+			var parameterList = BuildParameterList(ctor.Parameters.Where(p => p.IsNormalMethodParameter), ctor);
+			var typeName = EscapeIdentifier(type.Name.String);
+			return ctor.IsStatic
+				? $"static {typeName}()\n{{\n}}"
+				: $"public {typeName}({parameterList})\n{{\n}}";
+		}
+
+		static bool ShouldEmitMethodStub(MethodDef method) {
+			if (method.IsConstructor || method.IsGetter || method.IsSetter || method.IsAddOn || method.IsRemoveOn || method.IsFire)
+				return false;
+			return CanEmitSimpleMemberName(method.Name.String);
+		}
+
+		string? BuildMethodStubDeclaration(MethodDef method) {
+			if (!CanEmitSimpleMemberName(method.Name.String))
+				return null;
+
+			return BuildMethodHeader(method, EscapeIdentifier(method.Name.String), includeAsync: false) + Environment.NewLine +
+				"{\n\tthrow new global::System.NotSupportedException();\n}";
+		}
+
+		string BuildPatchMethodDeclaration(MethodDef method, string bodySnippet) {
+			var normalizedBody = bodySnippet.Replace("\r\n", "\n");
+			var bodyLines = string.Join(Environment.NewLine, normalizedBody.Split('\n').Select(line => "\t" + line));
+			return BuildMethodHeader(method, "__mcp_patch", includeAsync: IsAsyncLikeMethod(method)) + Environment.NewLine +
+				"{\n" + bodyLines + "\n}";
+		}
+
+		string BuildMethodHeader(MethodDef method, string methodName, bool includeAsync) {
+			var modifiers = new List<string> { "public" };
+			if (method.IsStatic)
+				modifiers.Add("static");
+			if (includeAsync)
+				modifiers.Add("async");
+
+			var genericSuffix = method.HasGenericParameters
+				? $"<{string.Join(", ", method.GenericParameters.Select(gp => EscapeIdentifier(gp.Name.String)))}>"
+				: string.Empty;
+			var parameterList = BuildParameterList(method.Parameters.Where(p => p.IsNormalMethodParameter), method);
+			return $"{string.Join(" ", modifiers)} {GetReturnTypeDeclaration(method.ReturnType, method)} {methodName}{genericSuffix}({parameterList})";
+		}
+
+		string BuildParameterList(IEnumerable<Parameter> parameters, MethodDef contextMethod) =>
+			string.Join(", ", parameters.Select((parameter, index) =>
+				$"{GetParameterPrefix(parameter)}{ToCSharpTypeName(parameter.Type, contextMethod)} {SanitizeIdentifier(string.IsNullOrWhiteSpace(parameter.Name) ? $"arg{index}" : parameter.Name!)}"));
+
+		static string GetParameterPrefix(Parameter parameter) {
+			if (HasParamArrayAttribute(parameter))
+				return "params ";
+			if (parameter.Type is ByRefSig) {
+				if (parameter.IsOut)
+					return "out ";
+				if (parameter.IsIn)
+					return "in ";
+				return "ref ";
+			}
+			return string.Empty;
+		}
+
+		static bool HasParamArrayAttribute(Parameter parameter) =>
+			parameter.ParamDef?.CustomAttributes.Any(attr => NormalizeTypeName(attr.AttributeType.FullName) == NormalizeTypeName("System.ParamArrayAttribute")) == true;
+
+		static string GetReturnTypeDeclaration(TypeSig returnType, MethodDef contextMethod) {
+			if (returnType.RemovePinnedAndModifiers() is ByRefSig byRefSig)
+				return "ref " + ToCSharpTypeName(byRefSig.Next, contextMethod);
+			return ToCSharpTypeName(returnType, contextMethod);
+		}
+
+		static bool IsAsyncLikeMethod(MethodDef method) =>
+			method.CustomAttributes.Any(attr => NormalizeTypeName(attr.AttributeType.FullName) == NormalizeTypeName("System.Runtime.CompilerServices.AsyncStateMachineAttribute"));
+
+		static bool CanEmitSimpleMemberName(string name) {
+			if (string.IsNullOrWhiteSpace(name))
+				return false;
+			if (name[0] != '_' && !char.IsLetter(name[0]))
+				return false;
+			for (int i = 1; i < name.Length; i++) {
+				var ch = name[i];
+				if (ch != '_' && !char.IsLetterOrDigit(ch))
+					return false;
+			}
+			return true;
+		}
+
+		static string EscapeIdentifier(string identifier) =>
+			identifier.StartsWith("@", StringComparison.Ordinal) ? identifier : "@" + identifier;
 
 		CompileReplacementResult CompileMethodBody(TypeDef type, MethodDef method, string wrapperSource) {
 			var syntaxTree = CSharpSyntaxTree.ParseText(wrapperSource);
@@ -349,7 +569,7 @@ using System.Text;
 					.Where(d => d.Severity == DiagnosticSeverity.Error)
 					.Select(d => d.ToString())
 					.ToList();
-				return new CompileReplacementResult(null, diagnostics);
+				return new CompileReplacementResult(null, null, diagnostics);
 			}
 
 			ms.Position = 0;
@@ -361,7 +581,7 @@ using System.Text;
 			var patchMethod = patchType.Methods.FirstOrDefault(m => m.Name.String == "__mcp_patch")
 				?? throw new InvalidOperationException("Compiled patch method '__mcp_patch' was not found.");
 
-			return new CompileReplacementResult(patchMethod, Array.Empty<string>());
+			return new CompileReplacementResult(patchType, patchMethod, Array.Empty<string>());
 		}
 
 		List<MetadataReference> BuildCompilationReferences(ModuleDef targetModule) {
@@ -376,6 +596,8 @@ using System.Text;
 			AddPath(typeof(Enumerable).Assembly.Location);
 			AddPath(typeof(Uri).Assembly.Location);
 			AddPath(typeof(System.Runtime.GCSettings).Assembly.Location);
+			AddPath(typeof(System.Threading.Tasks.Task).Assembly.Location);
+			AddPath(typeof(System.Threading.CancellationToken).Assembly.Location);
 
 			foreach (var moduleNode in documentTreeView.GetAllModuleNodes()) {
 				AddPath(moduleNode.Document?.Filename);
@@ -395,10 +617,11 @@ using System.Text;
 			return paths.Select(MetadataReference.CreateFromFile).ToList();
 		}
 
-		CilBody CloneMethodBodyIntoTarget(MethodDef sourceMethod, MethodDef targetMethod) {
+		CilBody CloneMethodBodyIntoTarget(TypeDef sourceType, MethodDef sourceMethod, TypeDef targetType, MethodDef targetMethod) {
 			if (sourceMethod.Body == null)
 				throw new InvalidOperationException("Compiled replacement method does not contain a body.");
 
+			var context = new PatchImportContext(sourceType, targetType, sourceMethod, targetMethod);
 			var importer = new Importer(targetMethod.Module, ImporterOptions.TryToUseTypeDefs | ImporterOptions.TryToUseMethodDefs | ImporterOptions.TryToUseFieldDefs);
 			var sourceBody = sourceMethod.Body;
 			var targetBody = new CilBody(sourceBody.InitLocals, new List<Instruction>(), new List<ExceptionHandler>()) {
@@ -408,7 +631,9 @@ using System.Text;
 
 			var localMap = new Dictionary<Local, Local>();
 			foreach (var local in sourceBody.Variables) {
-				var importedLocal = new Local(importer.Import(local.Type)) { Name = local.Name };
+				var importedType = ImportTypeSig(local.Type, importer, context)
+					?? throw new InvalidOperationException($"Unable to import local type '{local.Type.FullName}'.");
+				var importedLocal = new Local(importedType) { Name = local.Name };
 				targetBody.Variables.Add(importedLocal);
 				localMap[local] = importedLocal;
 			}
@@ -431,7 +656,7 @@ using System.Text;
 				var sourceInstruction = sourceBody.Instructions[i];
 				var clone = targetBody.Instructions[i];
 				clone.OpCode = sourceInstruction.OpCode;
-				clone.Operand = ImportOperand(sourceInstruction.Operand, importer, instructionMap, localMap, paramMap);
+				clone.Operand = ImportOperand(sourceInstruction.Operand, importer, instructionMap, localMap, paramMap, context);
 			}
 
 			foreach (var handler in sourceBody.ExceptionHandlers) {
@@ -441,7 +666,7 @@ using System.Text;
 					HandlerStart = handler.HandlerStart != null ? instructionMap[handler.HandlerStart] : null,
 					HandlerEnd = handler.HandlerEnd != null ? instructionMap[handler.HandlerEnd] : null,
 					FilterStart = handler.FilterStart != null ? instructionMap[handler.FilterStart] : null,
-					CatchType = handler.CatchType != null ? importer.Import(handler.CatchType) : null
+					CatchType = handler.CatchType != null ? ImportTypeReference(handler.CatchType, importer, context) : null
 				});
 			}
 
@@ -453,7 +678,8 @@ using System.Text;
 			Importer importer,
 			Dictionary<Instruction, Instruction> instructionMap,
 			Dictionary<Local, Local> localMap,
-			Dictionary<Parameter, Parameter> paramMap) {
+			Dictionary<Parameter, Parameter> paramMap,
+			PatchImportContext context) {
 			if (operand == null)
 				return null;
 			if (operand is Instruction branchTarget)
@@ -465,36 +691,234 @@ using System.Text;
 			if (operand is Parameter parameter)
 				return paramMap.TryGetValue(parameter, out var mappedParameter) ? mappedParameter : parameter;
 			if (operand is IMethod method)
-				return importer.Import(method);
+				return ImportMethodOperand(method, importer, context);
 			if (operand is IField field)
-				return importer.Import(field);
+				return ImportFieldOperand(field, importer, context);
 			if (operand is ITypeDefOrRef type)
-				return importer.Import(type);
-			if (operand is TypeSig typeSig) {
-				var tdor = typeSig.ToTypeDefOrRef();
-				if (tdor != null)
-					return importer.Import(tdor);
-			}
+				return ImportTypeReference(type, importer, context);
+			if (operand is TypeSig typeSig)
+				return ImportTypeSig(typeSig, importer, context);
 			if (operand is string || operand is sbyte || operand is byte || operand is int || operand is long || operand is float || operand is double)
 				return operand;
 			return operand;
 		}
 
-		List<Instruction> ParseInstructionLines(MethodDef targetMethod, IEnumerable<string> ilOpcodes) {
+		IMethod ImportMethodOperand(IMethod method, Importer importer, PatchImportContext context) {
+			if (method is MethodSpec methodSpec && IsPatchTypeReference(methodSpec.Method.DeclaringType, context))
+				throw new InvalidOperationException("update_method_sourcecode does not yet support generic instantiations of generated helper methods inside the patch type.");
+
+			if (IsPatchTypeReference(method.DeclaringType, context)) {
+				var resolved = ResolveTargetMethod(method, context);
+				return resolved.Module == context.TargetMethod.Module ? resolved : importer.Import(resolved);
+			}
+
+			return importer.Import(method);
+		}
+
+		MethodDef ResolveTargetMethod(IMethod patchMethod, PatchImportContext context) =>
+			context.TargetType.Methods.FirstOrDefault(candidate => MethodSignaturesMatch(patchMethod, candidate, context.SourceType, context.TargetType))
+				?? throw new InvalidOperationException($"Unable to map generated patch method '{patchMethod.FullName}' back to '{context.TargetType.FullName}'. Local functions and unsupported compiler-generated helpers are not yet supported.");
+
+		IField ImportFieldOperand(IField field, Importer importer, PatchImportContext context) {
+			if (IsPatchTypeReference(field.DeclaringType, context)) {
+				var resolved = ResolveTargetField(field, context);
+				return resolved.Module == context.TargetMethod.Module ? resolved : importer.Import(resolved);
+			}
+
+			return importer.Import(field);
+		}
+
+		FieldDef ResolveTargetField(IField patchField, PatchImportContext context) {
+			var patchFieldType = patchField.FieldSig?.Type;
+			return context.TargetType.Fields.FirstOrDefault(candidate =>
+				string.Equals(candidate.Name.String, patchField.Name, StringComparison.Ordinal) &&
+				GetTypeIdentity(patchFieldType, context.SourceType, context.TargetType) == GetTypeIdentity(candidate.FieldType, context.TargetType, context.TargetType))
+				?? throw new InvalidOperationException($"Unable to map generated patch field '{patchField.FullName}' back to '{context.TargetType.FullName}'.");
+		}
+
+		ITypeDefOrRef ImportTypeReference(ITypeDefOrRef type, Importer importer, PatchImportContext context) {
+			if (IsPatchTypeReference(type, context))
+				return context.TargetType;
+			if (IsOtherPatchOwnedTypeReference(type, context))
+				throw new InvalidOperationException($"update_method_sourcecode introduced helper type '{type.FullName}' inside the generated patch assembly. Lambdas, local functions, and anonymous helper types are not yet supported.");
+			return importer.Import(type);
+		}
+
+		TypeSig? ImportTypeSig(TypeSig? typeSig, Importer importer, PatchImportContext context) {
+			if (typeSig is null)
+				return null;
+
+			var module = context.TargetMethod.Module;
+			switch (typeSig.ElementType) {
+			case ElementType.Void: return module.CorLibTypes.Void;
+			case ElementType.Boolean: return module.CorLibTypes.Boolean;
+			case ElementType.Char: return module.CorLibTypes.Char;
+			case ElementType.I1: return module.CorLibTypes.SByte;
+			case ElementType.U1: return module.CorLibTypes.Byte;
+			case ElementType.I2: return module.CorLibTypes.Int16;
+			case ElementType.U2: return module.CorLibTypes.UInt16;
+			case ElementType.I4: return module.CorLibTypes.Int32;
+			case ElementType.U4: return module.CorLibTypes.UInt32;
+			case ElementType.I8: return module.CorLibTypes.Int64;
+			case ElementType.U8: return module.CorLibTypes.UInt64;
+			case ElementType.R4: return module.CorLibTypes.Single;
+			case ElementType.R8: return module.CorLibTypes.Double;
+			case ElementType.String: return module.CorLibTypes.String;
+			case ElementType.TypedByRef: return module.CorLibTypes.TypedReference;
+			case ElementType.I: return module.CorLibTypes.IntPtr;
+			case ElementType.U: return module.CorLibTypes.UIntPtr;
+			case ElementType.Object: return module.CorLibTypes.Object;
+			case ElementType.Ptr: return new PtrSig(ImportTypeSig(typeSig.Next, importer, context)!);
+			case ElementType.ByRef: return new ByRefSig(ImportTypeSig(typeSig.Next, importer, context)!);
+			case ElementType.ValueType: return CreateClassOrValueTypeSig(((ClassOrValueTypeSig)typeSig).TypeDefOrRef, true, importer, context);
+			case ElementType.Class: return CreateClassOrValueTypeSig(((ClassOrValueTypeSig)typeSig).TypeDefOrRef, false, importer, context);
+			case ElementType.Var:
+				var genericVar = (GenericVar)typeSig;
+				return new GenericVar(genericVar.Number, genericVar.OwnerType);
+			case ElementType.ValueArray:
+				var valueArray = (ValueArraySig)typeSig;
+				return new ValueArraySig(ImportTypeSig(typeSig.Next, importer, context)!, valueArray.Size);
+			case ElementType.FnPtr:
+				var fnPtr = (FnPtrSig)typeSig;
+				return new FnPtrSig(fnPtr.Signature);
+			case ElementType.SZArray:
+				return new SZArraySig(ImportTypeSig(typeSig.Next, importer, context)!);
+			case ElementType.MVar:
+				var genericMVar = (GenericMVar)typeSig;
+				return new GenericMVar(genericMVar.Number, genericMVar.OwnerMethod);
+			case ElementType.CModReqd:
+				var cmodReq = (ModifierSig)typeSig;
+				return new CModReqdSig(ImportTypeReference(cmodReq.Modifier, importer, context), ImportTypeSig(typeSig.Next, importer, context)!);
+			case ElementType.CModOpt:
+				var cmodOpt = (ModifierSig)typeSig;
+				return new CModOptSig(ImportTypeReference(cmodOpt.Modifier, importer, context), ImportTypeSig(typeSig.Next, importer, context)!);
+			case ElementType.Module:
+				var moduleSig = (ModuleSig)typeSig;
+				return new ModuleSig(moduleSig.Index, ImportTypeSig(typeSig.Next, importer, context)!);
+			case ElementType.Sentinel:
+				return new SentinelSig();
+			case ElementType.Pinned:
+				return new PinnedSig(ImportTypeSig(typeSig.Next, importer, context)!);
+			case ElementType.Array:
+				var arraySig = (ArraySig)typeSig;
+				return new ArraySig(ImportTypeSig(typeSig.Next, importer, context)!, arraySig.Rank, arraySig.Sizes, arraySig.LowerBounds);
+			case ElementType.GenericInst:
+				var genericInst = (GenericInstSig)typeSig;
+				var args = new List<TypeSig>(genericInst.GenericArguments.Count);
+				foreach (var arg in genericInst.GenericArguments)
+					args.Add(ImportTypeSig(arg, importer, context)!);
+				return new GenericInstSig((ClassOrValueTypeSig)ImportTypeSig(genericInst.GenericType, importer, context)!, args);
+			default:
+				var tdor = typeSig.ToTypeDefOrRef();
+				if (tdor != null)
+					return CreateClassOrValueTypeSig(tdor, typeSig.ElementType == ElementType.ValueType, importer, context);
+				return typeSig;
+			}
+		}
+
+		TypeSig CreateClassOrValueTypeSig(ITypeDefOrRef type, bool isValueType, Importer importer, PatchImportContext context) {
+			var importedType = ImportTypeReference(type, importer, context);
+			var corLibType = context.TargetMethod.Module.CorLibTypes.GetCorLibTypeSig(importedType);
+			if (corLibType != null)
+				return corLibType;
+			return isValueType ? new ValueTypeSig(importedType) : new ClassSig(importedType);
+		}
+
+		static bool IsPatchTypeReference(ITypeDefOrRef? type, PatchImportContext context) {
+			if (type == null)
+				return false;
+
+			var resolved = type.ResolveTypeDef();
+			if (resolved != null)
+				return resolved.Module == context.SourceType.Module && NormalizeTypeName(resolved.FullName) == NormalizeTypeName(context.SourceType.FullName);
+
+			return NormalizeTypeName(type.FullName) == NormalizeTypeName(context.SourceType.FullName);
+		}
+
+		static bool IsOtherPatchOwnedTypeReference(ITypeDefOrRef? type, PatchImportContext context) {
+			if (type == null)
+				return false;
+
+			var resolved = type.ResolveTypeDef();
+			return resolved != null && resolved.Module == context.SourceType.Module && NormalizeTypeName(resolved.FullName) != NormalizeTypeName(context.SourceType.FullName);
+		}
+
+		static bool MethodSignaturesMatch(IMethod patchMethod, MethodDef targetMethod, TypeDef sourceType, TypeDef targetType) {
+			var patchSig = patchMethod.MethodSig;
+			var targetSig = targetMethod.MethodSig;
+			if (patchSig == null || targetSig == null)
+				return false;
+			if (!string.Equals(patchMethod.Name, targetMethod.Name.String, StringComparison.Ordinal))
+				return false;
+			if (patchSig.Params.Count != targetSig.Params.Count || patchSig.GenParamCount != targetSig.GenParamCount || patchSig.HasThis != targetSig.HasThis)
+				return false;
+			if (GetTypeIdentity(patchSig.RetType, sourceType, targetType) != GetTypeIdentity(targetSig.RetType, targetType, targetType))
+				return false;
+			for (int i = 0; i < patchSig.Params.Count; i++) {
+				if (GetTypeIdentity(patchSig.Params[i], sourceType, targetType) != GetTypeIdentity(targetSig.Params[i], targetType, targetType))
+					return false;
+			}
+			return true;
+		}
+
+		static string GetTypeIdentity(TypeSig? typeSig, TypeDef sourceType, TypeDef targetType) {
+			if (typeSig == null)
+				return string.Empty;
+
+			typeSig = typeSig.RemovePinnedAndModifiers();
+			switch (typeSig.ElementType) {
+			case ElementType.ByRef:
+				return "ref:" + GetTypeIdentity(typeSig.Next, sourceType, targetType);
+			case ElementType.Ptr:
+				return "ptr:" + GetTypeIdentity(typeSig.Next, sourceType, targetType);
+			case ElementType.SZArray:
+				return "sz[]:" + GetTypeIdentity(typeSig.Next, sourceType, targetType);
+			case ElementType.Array:
+				var arraySig = (ArraySig)typeSig;
+				return $"array[{arraySig.Rank}]:" + GetTypeIdentity(arraySig.Next, sourceType, targetType);
+			case ElementType.GenericInst:
+				var genericInst = (GenericInstSig)typeSig;
+				return $"gi:{GetTypeIdentity(genericInst.GenericType, sourceType, targetType)}<{string.Join(",", genericInst.GenericArguments.Select(arg => GetTypeIdentity(arg, sourceType, targetType)))}>";
+			case ElementType.Var:
+				return "!" + ((GenericVar)typeSig).Number.ToString(CultureInfo.InvariantCulture);
+			case ElementType.MVar:
+				return "!!" + ((GenericMVar)typeSig).Number.ToString(CultureInfo.InvariantCulture);
+			case ElementType.Class:
+			case ElementType.ValueType:
+				var typeRef = ((TypeDefOrRefSig)typeSig).TypeDefOrRef;
+				var normalized = NormalizeTypeName(CleanTypeName(typeRef.FullName));
+				return normalized == NormalizeTypeName(sourceType.FullName)
+					? NormalizeTypeName(targetType.FullName)
+					: normalized;
+			default:
+				return NormalizeTypeName(CleanTypeName(typeSig.FullName));
+			}
+		}
+
+		List<Instruction> ParseInstructionLines(MethodDef targetMethod, IEnumerable<string> ilOpcodes, IReadOnlyList<Instruction> originalInstructions, bool allowOriginalInstructionTargets) {
 			var parsed = ilOpcodes
 				.Select((raw, index) => ParseInstructionSpec(raw, index))
 				.Where(spec => spec != null)
 				.Cast<ParsedInstructionSpec>()
 				.ToList();
 
-			if (parsed.Any(spec => spec.OpCode.OperandType == OperandType.InlineBrTarget || spec.OpCode.OperandType == OperandType.ShortInlineBrTarget || spec.OpCode.OperandType == OperandType.InlineSwitch))
-				throw new ArgumentException("Branch and switch operands are not yet supported by set_function_opcodes.");
-
-			var instructions = new List<Instruction>();
+			var instructions = new List<Instruction>(parsed.Count);
+			var labelMap = new Dictionary<string, Instruction>(StringComparer.OrdinalIgnoreCase);
 			foreach (var spec in parsed) {
-				var operand = CreateOperandForInstruction(targetMethod, spec);
-				instructions.Add(CreateInstruction(spec.OpCode, operand));
+				var placeholder = Instruction.Create(OpCodes.Nop);
+				instructions.Add(placeholder);
+				if (!string.IsNullOrWhiteSpace(spec.Label)) {
+					if (!labelMap.TryAdd(spec.Label!, placeholder))
+						throw new ArgumentException($"Duplicate label '{spec.Label}'.");
+				}
 			}
+
+			for (int i = 0; i < parsed.Count; i++) {
+				var spec = parsed[i];
+				instructions[i].OpCode = spec.OpCode;
+				instructions[i].Operand = CreateOperandForInstruction(targetMethod, spec, labelMap, originalInstructions, allowOriginalInstructionTargets);
+			}
+
 			return instructions;
 		}
 
@@ -513,10 +937,16 @@ using System.Text;
 			if (field == null)
 				throw new ArgumentException($"Unknown OpCode '{opName}' on line {index}.");
 
-			return new ParsedInstructionSpec((OpCode)field.GetValue(null)!, match.Groups["operand"].Success ? match.Groups["operand"].Value.Trim() : null);
+			var label = match.Groups["label"].Success ? match.Groups["label"].Value.Trim() : null;
+			return new ParsedInstructionSpec(label, (OpCode)field.GetValue(null)!, match.Groups["operand"].Success ? match.Groups["operand"].Value.Trim() : null);
 		}
 
-		object? CreateOperandForInstruction(MethodDef targetMethod, ParsedInstructionSpec spec) {
+		object? CreateOperandForInstruction(
+			MethodDef targetMethod,
+			ParsedInstructionSpec spec,
+			IReadOnlyDictionary<string, Instruction> labelMap,
+			IReadOnlyList<Instruction> originalInstructions,
+			bool allowOriginalInstructionTargets) {
 			switch (spec.OpCode.OperandType) {
 			case OperandType.InlineNone:
 				return null;
@@ -564,9 +994,69 @@ using System.Text;
 			case OperandType.ShortInlineVar:
 				return ResolveVariableOperand(targetMethod, spec.OpCode, RequireOperand(spec));
 
+			case OperandType.InlineBrTarget:
+			case OperandType.ShortInlineBrTarget:
+				return ResolveBranchTarget(RequireOperand(spec), labelMap, originalInstructions, allowOriginalInstructionTargets);
+
+			case OperandType.InlineSwitch:
+				return ResolveSwitchTargets(RequireOperand(spec), labelMap, originalInstructions, allowOriginalInstructionTargets);
+
 			default:
 				throw new ArgumentException($"Opcode '{spec.OpCode.Name}' uses unsupported operand type '{spec.OpCode.OperandType}'.");
 			}
+		}
+
+		Instruction ResolveBranchTarget(
+			string operandText,
+			IReadOnlyDictionary<string, Instruction> labelMap,
+			IReadOnlyList<Instruction> originalInstructions,
+			bool allowOriginalInstructionTargets) {
+			var token = operandText.Trim();
+			if (labelMap.TryGetValue(token, out var labeledInstruction))
+				return labeledInstruction;
+
+			if (!allowOriginalInstructionTargets)
+				throw new ArgumentException($"Branch target '{operandText}' must resolve to a label inside the replacement IL block.");
+
+			if (token.StartsWith("line:", StringComparison.OrdinalIgnoreCase)) {
+				var indexText = token.Substring(5);
+				if (!int.TryParse(indexText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lineIndex))
+					throw new ArgumentException($"Branch target '{operandText}' has an invalid line reference.");
+				if (lineIndex < 0 || lineIndex >= originalInstructions.Count)
+					throw new ArgumentException($"Branch target '{operandText}' is out of range. Valid original line indexes: 0-{Math.Max(0, originalInstructions.Count - 1)}.");
+				return originalInstructions[lineIndex];
+			}
+
+			if (token.StartsWith("IL_", StringComparison.OrdinalIgnoreCase)) {
+				var offsetText = token.Substring(3);
+				if (!int.TryParse(offsetText, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var offset))
+					throw new ArgumentException($"Branch target '{operandText}' has an invalid IL offset.");
+				var target = originalInstructions.FirstOrDefault(instr => instr.Offset == offset);
+				return target ?? throw new ArgumentException($"No original instruction with offset IL_{offset:X4} was found.");
+			}
+
+			if (int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericLine)) {
+				if (numericLine < 0 || numericLine >= originalInstructions.Count)
+					throw new ArgumentException($"Branch target '{operandText}' is out of range. Valid original line indexes: 0-{Math.Max(0, originalInstructions.Count - 1)}.");
+				return originalInstructions[numericLine];
+			}
+
+			throw new ArgumentException($"Branch target '{operandText}' could not be resolved. Use a label, line:<index>, IL_<offset>, or a 0-based original line index.");
+		}
+
+		Instruction[] ResolveSwitchTargets(
+			string operandText,
+			IReadOnlyDictionary<string, Instruction> labelMap,
+			IReadOnlyList<Instruction> originalInstructions,
+			bool allowOriginalInstructionTargets) {
+			var tokens = operandText.Split(',')
+				.Select(token => token.Trim())
+				.Where(token => token.Length > 0)
+				.ToArray();
+			if (tokens.Length == 0)
+				throw new ArgumentException("switch requires at least one target.");
+
+			return tokens.Select(token => ResolveBranchTarget(token, labelMap, originalInstructions, allowOriginalInstructionTargets)).ToArray();
 		}
 
 		static Instruction CreateInstruction(OpCode opCode, object? operand) {
@@ -585,6 +1075,8 @@ using System.Text;
 				ITypeDefOrRef type => Instruction.Create(opCode, type),
 				Local local => Instruction.Create(opCode, local),
 				Parameter parameter => Instruction.Create(opCode, parameter),
+				Instruction target => Instruction.Create(opCode, target),
+				Instruction[] targets => Instruction.Create(opCode, targets),
 				_ => throw new ArgumentException($"Unsupported operand type '{operand.GetType().FullName}' for opcode '{opCode.Name}'.")
 			};
 		}
@@ -609,6 +1101,29 @@ using System.Text;
 				return ResolveLocal(targetMethod, normalized);
 
 			throw new ArgumentException($"Unable to resolve variable operand '{operandText}'. Use arg:<index|name> or local:<index|name>.");
+		}
+
+		HashSet<Instruction> GetRemovedOriginalInstructions(string mode, int lineNumber, IReadOnlyList<Instruction> originalInstructions, int insertedInstructionCount) {
+			switch (mode) {
+			case "overwrite":
+				return new HashSet<Instruction>(originalInstructions.Skip(lineNumber).Take(Math.Min(insertedInstructionCount, Math.Max(0, originalInstructions.Count - lineNumber))));
+			case "replace_all":
+				return new HashSet<Instruction>(originalInstructions);
+			default:
+				return new HashSet<Instruction>();
+			}
+		}
+
+		void EnsureReferencedInstructionsRemain(IEnumerable<Instruction> instructions, HashSet<Instruction> removedOriginalInstructions) {
+			if (removedOriginalInstructions.Count == 0)
+				return;
+
+			foreach (var instruction in instructions) {
+				if (instruction.Operand is Instruction target && removedOriginalInstructions.Contains(target))
+					throw new ArgumentException($"Instruction '{instruction.OpCode.Name}' targets an original instruction that would be removed by this edit. Use a label or a surviving target.");
+				if (instruction.Operand is Instruction[] targets && targets.Any(removedOriginalInstructions.Contains))
+					throw new ArgumentException($"Instruction '{instruction.OpCode.Name}' targets at least one original instruction that would be removed by this edit. Use labels or surviving targets.");
+			}
 		}
 
 		Parameter ResolveParameter(MethodDef method, string token) {
@@ -1008,24 +1523,42 @@ using System.Text;
 			};
 
 		readonly struct ParsedInstructionSpec {
-			public ParsedInstructionSpec(OpCode opCode, string? operandText) {
+			public ParsedInstructionSpec(string? label, OpCode opCode, string? operandText) {
+				Label = label;
 				OpCode = opCode;
 				OperandText = operandText;
 			}
 
+			public string? Label { get; }
 			public OpCode OpCode { get; }
 			public string? OperandText { get; }
 		}
 
 		readonly struct CompileReplacementResult {
-			public CompileReplacementResult(MethodDef? compiledMethod, IReadOnlyList<string> diagnostics) {
+			public CompileReplacementResult(TypeDef? compiledType, MethodDef? compiledMethod, IReadOnlyList<string> diagnostics) {
+				CompiledType = compiledType;
 				CompiledMethod = compiledMethod;
 				Diagnostics = diagnostics;
 			}
 
+			public TypeDef? CompiledType { get; }
 			public MethodDef? CompiledMethod { get; }
 			public IReadOnlyList<string> Diagnostics { get; }
-			public bool Success => CompiledMethod != null && Diagnostics.Count == 0;
+			public bool Success => CompiledType != null && CompiledMethod != null && Diagnostics.Count == 0;
+		}
+
+		sealed class PatchImportContext {
+			public PatchImportContext(TypeDef sourceType, TypeDef targetType, MethodDef sourceMethod, MethodDef targetMethod) {
+				SourceType = sourceType;
+				TargetType = targetType;
+				SourceMethod = sourceMethod;
+				TargetMethod = targetMethod;
+			}
+
+			public TypeDef SourceType { get; }
+			public TypeDef TargetType { get; }
+			public MethodDef SourceMethod { get; }
+			public MethodDef TargetMethod { get; }
 		}
 
 		sealed class MetadataReferenceComparer : IEqualityComparer<MetadataReference> {
