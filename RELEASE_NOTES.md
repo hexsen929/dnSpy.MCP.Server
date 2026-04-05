@@ -2,6 +2,73 @@
 
 ---
 
+## v1.8.1 — 2026-04-05
+
+### New: AgentSmithers-Compatible Direct Editing
+
+This release line includes a dedicated compatibility layer for direct source and IL editing workflows:
+
+| Tool | Description |
+|------|-------------|
+| `get_class_sourcecode` | Decompile a full type to C# in one call |
+| `get_method_sourcecode` | Decompile a single method |
+| `get_function_opcodes` | Stable IL listing with line indexes and operands |
+| `set_function_opcodes` | Insert / append / overwrite IL by line index |
+| `overwrite_full_function_opcodes` | Replace the full method body with supplied IL |
+| `update_method_sourcecode` | Compile replacement C# statements into a new method body |
+
+Legacy AgentSmithers aliases remain supported:
+
+- `Get_Class_Sourcecode`
+- `Get_Method_SourceCode`
+- `Get_Function_Opcodes`
+- `Set_Function_Opcodes`
+- `Overwrite_Full_Func_Opcodes`
+- `Update_Method_SourceCode`
+
+### Improved: IL Patch Fidelity
+
+- `set_function_opcodes` now supports branch targets that resolve to:
+  - new labels inside the replacement IL block
+  - original surviving instructions via `line:<index>` and `IL_<offset>`
+- `switch` operands are now handled explicitly through the same target-resolution path
+- `update_method_sourcecode` now injects same-type member skeletons into the generated wrapper, allowing replacement bodies to reference more fields, properties, events, and helper methods directly
+
+### Changed: Safer Build / Release Packaging
+
+GitHub Actions build and release artifacts are now shipped as **plugin-only bundles**.
+
+Included files:
+- `dnSpy.MCP.Server.x.dll`
+- `dnSpy.MCP.Server.x.pdb`
+- `mcp-config.json`
+- `AssemblyData.dll`
+- `de4dot*.dll`
+- `Echo*.dll`
+- `Echo*.pdb`
+- `Echo*.xml`
+- `INSTALL.txt`
+
+This avoids encouraging users to overwrite the full dnSpy host tree with a plugin package.
+
+### Fixed: net48 Runtime Dependency Guidance
+
+The net48 deployment path is now explicitly documented for the common dependency mismatch case:
+
+- `System.Text.Json`
+- `System.Collections.Immutable`
+- `System.Text.Encodings.Web`
+- `System.Memory`
+
+The recommended repair flow is:
+1. start from a clean dnSpyEx netframework install
+2. copy in the plugin-only bundle
+3. update the three host config files (`dnSpy.exe.config`, `dnSpy-x86.exe.config`, `dnSpy.Console.exe.config`) with the required binding redirects when needed
+
+### Total tools: **133**
+
+---
+
 ## v1.8.0 — 2026-03-23
 
 ### New: Streamable HTTP Transport

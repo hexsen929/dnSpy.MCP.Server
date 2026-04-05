@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-04-05
+
+### Added
+- **AgentSmithers-style direct editing tools** (6 tools — `AgentCompatibilityTools.cs`):
+  - `get_class_sourcecode` — decompile a whole type in one call
+  - `get_method_sourcecode` — decompile a single method
+  - `get_function_opcodes` — stable IL listing with line indexes and operands for patch workflows
+  - `set_function_opcodes` — line-based IL splicing with labels, branch targets, and `switch` targets
+  - `overwrite_full_function_opcodes` — full method-body IL replacement
+  - `update_method_sourcecode` — compile a replacement method body from C# statements and swap the IL in-memory
+- **AgentSmithers legacy aliases** remain wired in `McpTools.cs`:
+  - `Get_Class_Sourcecode`
+  - `Get_Method_SourceCode`
+  - `Get_Function_Opcodes`
+  - `Set_Function_Opcodes`
+  - `Overwrite_Full_Func_Opcodes`
+  - `Update_Method_SourceCode`
+
+### Changed
+- `set_function_opcodes` now supports branch and `switch` operands that resolve to:
+  - labels introduced in the replacement IL block
+  - surviving original instructions via `line:<index>` or `IL_<offset>`
+- `update_method_sourcecode` now generates a richer wrapper that includes same-type field/property/event/helper member skeletons so replacement bodies can reference more instance members directly.
+- GitHub Actions build/release artifacts are now packaged as **plugin-only bundles** (`dnSpy.MCP.Server.x.dll`, de4dot/Echo dependencies, config, symbols) instead of mirroring the full dnSpy output folder.
+
+### Fixed
+- Trimmed unused `ModelContextProtocol` / `Microsoft.Extensions.Hosting` package dependencies from the net48 build path to reduce avoidable runtime dependency churn inside dnSpyEx's AppDomain.
+- Documented the required net48 binding-redirect repair path for `System.Text.Json`, `System.Collections.Immutable`, `System.Text.Encodings.Web`, and `System.Memory` when deploying the plugin into a clean dnSpy tree.
+
+### Documentation
+- README now documents:
+  - the AgentSmithers-compatible editing workflow
+  - safe Windows deployment of the plugin-only bundle
+  - manual net48 dependency repair steps
+  - updated project structure for `AgentCompatibilityTools`, `SourceMapTools`, `NativeRuntimeTools`, `InterceptionTools`, and `McpTools.Schemas`
+
+### Total tools: **133**
+
+---
+
 ## [1.7.0] - 2026-02-28
 
 ### Added

@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.0 | **Tools**: 100+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.1 | **Tools**: 130+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -19,6 +19,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
    - [Control Flow Tools](#control-flow-tools)
    - [Analysis & Cross-Reference Tools](#analysis--cross-reference-tools)
    - [Edit Tools](#edit-tools)
+   - [Agent Compatibility Editing Tools](#agent-compatibility-editing-tools)
    - [Embedded Resource Tools](#embedded-resource-tools)
    - [Debug Tools](#debug-tools)
    - [SourceMap Tools](#sourcemap-tools)
@@ -40,14 +41,18 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
 
 ## Features
 
-### What Changed In 1.8.0
+### What Changed In 1.8.x
 
-- Streamable HTTP transport at `POST /mcp` is now the primary MCP surface
+- streamable HTTP at `POST /mcp` is now the primary MCP surface
 - managed CIL control-flow analysis was added using Echo
 - HoLLy-inspired non-UI SourceMap support was added
 - runtime reversing support was expanded with native export resolution, Iced disassembly, patch tracking, PEB inspection, thread suspension, and DLL injection
 - persistent managed interception was added through `trace_method` and `hook_function`
-- tool discoverability now includes catalog metadata such as `category`, `hidden_by_default`, `is_legacy`, and `preferred_replacement`
+- AgentSmithers-style direct editing was added via `get_class_sourcecode`, `get_method_sourcecode`, `get_function_opcodes`, `set_function_opcodes`, `overwrite_full_function_opcodes`, and `update_method_sourcecode`
+- `set_function_opcodes` now supports branch and `switch` targets that point at newly inserted labels or surviving original instructions (`line:<index>` / `IL_<offset>`)
+- `update_method_sourcecode` now compiles replacement method bodies inside a generated wrapper that includes same-type member stubs, so patches can reference more fields, properties, events, and helper methods directly
+- GitHub Actions build/release artifacts are now shipped as **plugin-only bundles** for safer Windows deployment
+- tool discoverability now includes catalog metadata such as `category`, `hidden_by_default`, `is_legacy`, `preferred_replacement`, and `notes`
 
 | Category | Capabilities |
 |----------|-------------|
@@ -58,6 +63,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
 | **Control Flow** | Build managed CFGs and reduced basic-block views for CIL methods using Echo |
 | **Analysis** | Find callers/users, trace field reads/writes, call graphs, dead code, cross-assembly dependencies |
 | **Edit** | Rename members, change access modifiers, edit metadata, patch methods, inject types, save to disk |
+| **Agent Compatibility** | AgentSmithers-style class/method decompilation, stable IL listing, line-based IL splicing, full method-body replacement, and source-body hot patching |
 | **Resources** | List, read, add, remove embedded resources (ManifestResource table); extract Costura.Fody-embedded assemblies |
 | **Debug** | Manage breakpoints (with alias-aware conditions), launch/attach processes, pause/resume/stop sessions, single-step (over/into/out), inspect call stacks, read locals, evaluate expressions |
 | **Interception** | Persistent managed tracing and breakpoint-backed interception with `trace_method` and `hook_function` |
@@ -140,6 +146,60 @@ dotnet clean Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj
 # Check for errors (expects "Compilación correcta" or "Build succeeded")
 dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release --nologo 2>&1 | tail -5
 ```
+
+### Recommended Windows deployment
+
+The safest deployment flow for the `net48` build is:
+
+1. unpack a **clean official dnSpyEx netframework** release into a new directory
+2. copy the contents of the MCP **plugin-only bundle** into dnSpy's `bin` directory
+3. keep `dnSpy.exe`, `dnSpy.exe.config`, and the rest of the host tree from the clean dnSpy release
+4. launch dnSpy from a **local Windows drive** such as `C:\dnSpy-netframework\dnSpy.exe`
+
+Do **not**:
+
+- replace the whole dnSpy folder with the MCP artifact zip
+- mix files into an already-patched or unknown dnSpy install
+- launch dnSpy directly from a UNC path such as `\\Mac\Home\...`
+
+### Manual net48 dependency repair
+
+If the extension fails to load with a message like:
+
+- `Could not load file or assembly 'System.Text.Json, Version=8.0.0.5'`
+- `Could not load file or assembly 'System.Collections.Immutable, Version=10.0.0.5'`
+- `Could not load file or assembly 'System.Memory, Version=4.0.5.0'`
+
+then the plugin was copied into a dnSpy install whose `*.config` binding redirects do not cover the newer dependency versions expected by the plugin.
+
+Patch **all three** host config files:
+
+- `dnSpy.exe.config`
+- `dnSpy-x86.exe.config`
+- `dnSpy.Console.exe.config`
+
+Inside `<assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">`, ensure these redirects exist:
+
+```xml
+<dependentAssembly>
+  <assemblyIdentity name="System.Collections.Immutable" culture="neutral" publicKeyToken="b03f5f7f11d50a3a" />
+  <bindingRedirect oldVersion="0.0.0.0-10.0.0.5" newVersion="8.0.0.0" />
+</dependentAssembly>
+<dependentAssembly>
+  <assemblyIdentity name="System.Text.Json" publicKeyToken="cc7b13ffcd2ddd51" culture="neutral" />
+  <bindingRedirect oldVersion="0.0.0.0-8.0.0.5" newVersion="8.0.0.0" />
+</dependentAssembly>
+<dependentAssembly>
+  <assemblyIdentity name="System.Text.Encodings.Web" publicKeyToken="cc7b13ffcd2ddd51" culture="neutral" />
+  <bindingRedirect oldVersion="0.0.0.0-8.0.0.0" newVersion="8.0.0.0" />
+</dependentAssembly>
+<dependentAssembly>
+  <assemblyIdentity name="System.Memory" publicKeyToken="cc7b13ffcd2ddd51" culture="neutral" />
+  <bindingRedirect oldVersion="0.0.0.0-4.0.5.0" newVersion="4.0.1.2" />
+</dependentAssembly>
+```
+
+If you are unsure whether a dnSpy tree is still contaminated by older plugin files, delete the whole install directory, unpack a fresh dnSpy release, and redeploy only the plugin bundle.
 
 ### Runtime
 
@@ -384,6 +444,50 @@ In-memory metadata editing. Changes are applied immediately to dnlib's in-memory
 > **Note**: `rename_member` changes only the metadata name. It does **not** update call sites, string literals, or XML docs.
 
 > **Note**: `patch_method_to_ret` is ideal for disabling anti-debug, anti-tamper, or license-check routines before saving and re-analyzing.
+
+---
+
+### Agent Compatibility Editing Tools
+
+Direct source and IL editing tools intended to preserve familiar AgentSmithers-style workflows while staying inside dnSpyEx's in-memory editing model.
+
+| Tool | Description | Required params | Optional params |
+|------|-------------|-----------------|-----------------|
+| `get_class_sourcecode` | Decompile an entire type to C# in one call | `assembly_name`, `type_full_name` or (`namespace`, `class_name`) | `file_path` |
+| `get_method_sourcecode` | Decompile a single method to C# | `assembly_name`, `method_name` | `type_full_name`, `namespace`, `class_name`, `method_token`, `parameter_count`, `file_path` |
+| `get_function_opcodes` | Return method IL with stable line indexes, IL offsets, opcode names, and operands in an AgentSmithers-friendly shape | `assembly_name`, `method_name` | `type_full_name`, `namespace`, `class_name`, `method_token`, `parameter_count`, `file_path` |
+| `set_function_opcodes` | Insert, append, or overwrite IL at a specific instruction index. Supports labels, branch targets, and `switch` targets that resolve to new labels or surviving original instructions | `assembly_name`, `method_name`, `il_opcodes`, `il_line_number` | `type_full_name`, `namespace`, `class_name`, `method_token`, `parameter_count`, `mode` |
+| `overwrite_full_function_opcodes` | Replace the full method body with the supplied IL instruction list | `assembly_name`, `method_name`, `il_opcodes` | `type_full_name`, `namespace`, `class_name`, `method_token`, `parameter_count` |
+| `update_method_sourcecode` | Compile C# statements into a generated replacement method body and swap the target method's IL in-memory | `assembly_name`, `method_name`, `source` | `type_full_name`, `namespace`, `class_name`, `method_token`, `parameter_count`, `file_path` |
+
+#### Parameter details
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `method_token` | string | Optional metadata token (hex or decimal) to disambiguate overloads |
+| `parameter_count` | integer | Optional overload disambiguator: number of normal method parameters |
+| `il_opcodes` | array of strings | IL lines such as `Ldstr Hello`, `loop: br.s loop`, `brtrue.s line:17`, or `switch case0, case1, IL_0010` |
+| `il_line_number` | integer | 0-based instruction index used by `set_function_opcodes` |
+| `mode` | string | `append`, `insert`, or `overwrite` (default `append`) |
+| `source` | string | C# statements that become the body of the replacement method |
+
+#### Compatibility aliases
+
+The following legacy names are still accepted for compatibility with existing AgentSmithers prompts and clients:
+
+- `Get_Class_Sourcecode`
+- `Get_Method_SourceCode`
+- `Get_Function_Opcodes`
+- `Set_Function_Opcodes`
+- `Overwrite_Full_Func_Opcodes`
+- `Update_Method_SourceCode`
+
+#### Notes
+
+- `set_function_opcodes` supports branch and `switch` operands that point either to labels introduced in the new block or to original surviving instructions via `line:<index>` / `IL_<offset>`
+- `update_method_sourcecode` now injects same-type member skeletons into the generated wrapper so patch bodies can reference more fields, properties, events, and helper methods directly
+- `update_method_sourcecode` currently rejects nested types, generic types, generic methods, lambdas/local functions that synthesize helper types, and helper generic instantiations
+- all edits are **in-memory** until you call `save_assembly`
 
 ---
 
@@ -934,20 +1038,32 @@ dnSpy.MCP.Server/
     │   ├── AssemblyTools.cs         # Assembly & type listing
     │   ├── TypeTools.cs             # Type internals + IL
     │   ├── EditTools.cs             # Metadata editing, method patching
+    │   ├── AgentCompatibilityTools.cs # AgentSmithers-style source / IL editing
     │   ├── DebugTools.cs            # Debugger integration
     │   ├── DumpTools.cs             # Memory dump & PE tools
     │   ├── MemoryInspectTools.cs    # Local variable inspection
     │   ├── UsageFindingCommandTools.cs  # IL usage analysis
     │   ├── CodeAnalysisHelpers.cs   # Call-graph & dependency analysis
     │   ├── De4dotTools.cs           # de4dot deobfuscation (all builds)
+    │   ├── SourceMapTools.cs        # HoLLy-style non-UI SourceMap support
+    │   ├── NativeRuntimeTools.cs    # Native reversing, export patching, DLL injection
+    │   ├── InterceptionTools.cs     # Trace / hook persistent managed methods
     │   ├── SkillsTools.cs           # Skills knowledge base (MD + JSON)
     │   ├── ScriptTools.cs           # Roslyn C# scripting
     │   ├── WindowTools.cs           # Win32/WPF dialog management
-    │   └── McpTools.cs              # Tool registry & routing
+    │   ├── McpTools.cs              # Tool registry & routing
+    │   └── McpTools.Schemas.cs      # Tool schemas + catalog metadata
     ├── Communication/
-    │   └── McpServer.cs             # streamable HTTP server
+    │   ├── McpServer.cs             # HTTP entrypoint / route dispatch
+    │   └── McpInteropTools.cs       # MCP ecosystem compatibility helpers
+    ├── Configuration/
+    │   └── McpConfig.cs             # JSON config next to the plugin DLL
     ├── Contracts/
     │   └── McpProtocol.cs           # DTO types
+    ├── Core/
+    │   ├── McpProtocolHelpers.cs
+    │   ├── McpRequestDispatcher.cs
+    │   └── McpSessionManager.cs
     ├── Helper/
     │   └── McpLogger.cs
     └── Presentation/
@@ -1027,6 +1143,8 @@ netstat -ano | findstr :3100
 | Dump `IsFileLayout: false` | Memory layout dump | Use `dump_module_unpacked` instead — it performs the layout fix automatically |
 | `unpack_from_memory` fails with anti-debug error | Process kills itself before EntryPoint | Use `patch_method_to_ret` to neutralize anti-debug methods first, save the patched binary, then retry |
 | `Failed to connect` when adding MCP server | Wrong transport type or endpoint | Use the streamable HTTP endpoint `http://localhost:3100/mcp` and ensure the client is configured for HTTP/streamable HTTP, not SSE |
+| `Could not load file or assembly 'System.Text.Json'` / `System.Collections.Immutable` / `System.Memory` | net48 plugin copied into a dnSpy install whose `*.config` redirects are too old | Redeploy from a clean dnSpy tree and add the binding redirects shown in **Manual net48 dependency repair** above |
+| dnSpy still loads an old MCP build after redeploy | Multiple dnSpy folders or stale copied plugin files | Search for every `dnSpy.MCP.Server.x.dll`, delete old copies, and redeploy only the current plugin-only bundle into a fresh local install |
 | `dump_cordbg_il` returns E_NOINTERFACE errors | COM STA apartment threading | `ICorDebugModule` COM objects belong to the CorDebug engine thread; calling from another STA fails. This is a known limitation — use `dump_module_unpacked` instead for memory dumps. |
 | `Connection refused` from VM / sandbox | `host` is still `"localhost"` | Set `"host": "0.0.0.0"` in `mcp-config.json` and run `netsh http add urlacl url=http://+:3100/ user=Everyone` as Administrator. |
 | `Access denied` when binding to `0.0.0.0` | Missing URL ACL | Run `netsh http add urlacl url=http://+:3100/ user=Everyone` as Administrator (replace `3100` with your configured port). |

@@ -2,18 +2,20 @@
 
 ## Overview
 
-The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that exposes advanced .NET assembly analysis capabilities through an HTTP/SSE interface. The codebase is organized by functional domains to maintain clarity and enable incremental development.
+The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that exposes advanced .NET assembly analysis capabilities through a streamable HTTP transport (`POST /mcp`) plus legacy SSE compatibility endpoints. The codebase is organized by functional domains to maintain clarity and enable incremental development.
 
 ---
 
 ## Core Components
 
 ### 1. **McpServer.cs**
-**Responsibility**: HTTP/SSE Protocol Implementation
+**Responsibility**: HTTP transport entrypoint and route coordination
 **Key Functionality**:
 - HTTP listener on localhost:3100
 - JSON-RPC 2.0 message handling
-- SSE event streaming with 15-second heartbeats
+- streamable HTTP session handling at `GET|POST|DELETE /mcp`
+- legacy SSE compatibility handling at `/sse` + `/message`
+- SSE event streaming with heartbeat/status events
 - MCP lifecycle (initialize, ping, shutdown)
 - Error handling and response formatting
 
@@ -29,7 +31,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 **Structure**: Split into two files via C# `partial class`
 
 #### **McpTools.cs** — Dispatch & Helpers
-- `ExecuteTool(toolName, arguments)` — Main dispatcher switch (95 cases)
+- `ExecuteTool(toolName, arguments)` — Main dispatcher switch for 133 canonical tools plus legacy compatibility aliases
 - `ListTools()` — Self-discovery endpoint
 - `InvokeLazy<T>()` — Reflection-based delegation to lazy-loaded service classes
 - `FindAssemblyByName()` / `FindTypeInAssembly()` — Assembly/type lookup helpers
@@ -40,11 +42,11 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 - `GetAllTypesRecursive()` / `GetAllNestedTypesRecursive()` — IL traversal helpers
 
 #### **McpTools.Schemas.cs** — Tool Registry (partial class extension)
-- `GetAvailableTools()` — Aggregates 13 category methods into the full tool list
-- 13 private category methods: `GetAssemblyToolSchemas()`, `GetTypeToolSchemas()`, `GetMethodILToolSchemas()`, `GetAnalysisToolSchemas()`, `GetEditToolSchemas()`, `GetResourceToolSchemas()`, `GetDebugToolSchemas()`, `GetMemoryToolSchemas()`, `GetDeobfuscationToolSchemas()`, `GetSkillsToolSchemas()`, `GetScriptingToolSchemas()`, `GetWindowToolSchemas()`, `GetUtilityToolSchemas()`
+- `GetAvailableTools()` — Aggregates 16 category methods into the full tool list and annotates catalog metadata
+- 16 private category methods: `GetAssemblyToolSchemas()`, `GetTypeToolSchemas()`, `GetMethodILToolSchemas()`, `GetAnalysisToolSchemas()`, `GetControlFlowToolSchemas()`, `GetEditToolSchemas()`, `GetResourceToolSchemas()`, `GetDebugToolSchemas()`, `GetMemoryToolSchemas()`, `GetDeobfuscationToolSchemas()`, `GetSkillsToolSchemas()`, `GetScriptingToolSchemas()`, `GetWindowToolSchemas()`, `GetSourceMapToolSchemas()`, `GetNativeRuntimeToolSchemas()`, `GetUtilityToolSchemas()`
 
-**Constructor** (MEF `[ImportingConstructor]`) injects 15 lazy services:
-`assemblyTools`, `typeTools`, `editTools`, `resourceTools`, `debugTools`, `dumpTools`, `memoryInspectTools`, `usageFindingCommandTools`, `codeAnalysisHelpers`, `de4dotTools`, `skillsTools`, `scriptTools`, `windowTools`, plus `IDocumentTreeView` and `IDecompilerService`.
+**Constructor** (MEF `[ImportingConstructor]`) injects 19 lazy services:
+`assemblyTools`, `typeTools`, `editTools`, `debugTools`, `dumpTools`, `memoryInspectTools`, `usageFindingTools`, `codeAnalysisTools`, `controlFlowTools`, `discoveryTools`, `de4dotExeTool`, `de4dotTools`, `skillsTools`, `scriptTools`, `windowTools`, `sourceMapTools`, `nativeRuntimeTools`, `interceptionTools`, `agentCompatibilityTools`.
 
 ---
 
@@ -91,7 +93,23 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 6. **ResourceTools.cs** (Lazy-Loaded)
+### 6. **AgentCompatibilityTools.cs** (Lazy-Loaded)
+**Responsibility**: AgentSmithers-compatible direct source and IL editing
+**Methods**:
+- `GetClassSourcecode()` / `GetMethodSourcecode()` - Familiar source retrieval helpers
+- `GetFunctionOpcodes()` - Stable IL listing with line indexes and operands
+- `SetFunctionOpcodes()` - Line-based IL splice/overwrite with labels, branches, and `switch`
+- `OverwriteFullFunctionOpcodes()` - Full method-body IL replacement
+- `UpdateMethodSourcecode()` - Compile a generated wrapper method body and transplant its IL into the target method
+
+**Key compatibility behaviour**:
+- legacy aliases such as `Get_Function_Opcodes` and `Update_Method_SourceCode` remain accepted
+- branch targets can resolve to newly inserted labels or surviving original instructions (`line:<index>` / `IL_<offset>`)
+- generated wrapper code includes same-type member skeletons so source patches can reference more instance members directly
+
+---
+
+### 7. **Resource Operations** (implemented in `EditTools.cs`)
 **Responsibility**: Embedded resource management
 **Methods**:
 - `ListResources()` - Enumerate ManifestResource entries
@@ -102,7 +120,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 7. **DebugTools.cs** (Lazy-Loaded)
+### 8. **DebugTools.cs** (Lazy-Loaded)
 **Responsibility**: Debugger lifecycle, breakpoint management, and single-step execution
 **Methods**:
 - `GetDebuggerState()` / `GetCallStack()` - Session inspection
@@ -120,7 +138,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 8. **DumpTools.cs** (Lazy-Loaded)
+### 9. **DumpTools.cs** (Lazy-Loaded)
 **Responsibility**: Memory dump, PE analysis, and live memory patching
 **Methods**:
 - `ListRuntimeModules()` - Enumerate .NET modules loaded in debugged process
@@ -141,7 +159,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 9. **MemoryInspectTools.cs** (Lazy-Loaded)
+### 10. **MemoryInspectTools.cs** (Lazy-Loaded)
 **Responsibility**: Runtime variable inspection and expression evaluation in paused debug sessions
 **Methods**:
 - `GetLocalVariables()` - Read locals and parameters from current stack frame using `IDbgDotNetRuntime`
@@ -154,7 +172,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 10. **UsageFindingCommandTools.cs** (Lazy-Loaded)
+### 11. **UsageFindingCommandTools.cs** (Lazy-Loaded)
 **Responsibility**: IL-Based Usage Analysis
 **Methods**:
 - `FindWhoUsesType()` - Type reference tracing (base class, interface, field, parameter, return type)
@@ -168,7 +186,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 11. **CodeAnalysisHelpers.cs** (Lazy-Loaded)
+### 12. **CodeAnalysisHelpers.cs** (Lazy-Loaded)
 **Responsibility**: Advanced Code Analysis Infrastructure
 **Methods**:
 - `AnalyzeCallGraph()` - Recursive method call graph up to configurable depth
@@ -182,7 +200,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 12. **De4dotTools.cs** (Lazy-Loaded)
+### 13. **De4dotTools.cs** (Lazy-Loaded)
 **Responsibility**: Deobfuscation via integrated de4dot engine
 **Methods**:
 - `ListDeobfuscators()` - List all supported obfuscator types
@@ -195,7 +213,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 13. **SkillsTools.cs** (Lazy-Loaded)
+### 14. **SkillsTools.cs** (Lazy-Loaded)
 **Responsibility**: Persistent knowledge base for RE procedures and workflows
 **Methods**:
 - `ListSkills()` / `GetSkill()` / `SaveSkill()` / `SearchSkills()` / `DeleteSkill()` - CRUD
@@ -203,7 +221,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 14. **ScriptTools.cs** (Lazy-Loaded)
+### 15. **ScriptTools.cs** (Lazy-Loaded)
 **Responsibility**: Roslyn C# scripting inside the dnSpy process
 **Methods**:
 - `RunScript(code)` - Execute arbitrary C# via `Microsoft.CodeAnalysis.CSharp.Scripting`
@@ -212,7 +230,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 15. **WindowTools.cs**
+### 16. **WindowTools.cs**
 **Responsibility**: Win32 and WPF dialog enumeration and dismissal
 **Methods**:
 - `ListDialogs()` — Enumerate active dialog windows (Win32 `#32770` + WPF `Application.Current.Windows`). Returns title, HWND, message text (Static child controls), and button labels.
@@ -223,6 +241,36 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 - No dnSpy service dependencies — `[ImportingConstructor] WindowTools() { }`.
 - `WpfApp = System.Windows.Application` alias avoids namespace ambiguity with `dnSpy.MCP.Server.Application`.
 - Button matching: exact tokens EN + ES → substring fallback.
+
+---
+
+### 17. **SourceMapTools.cs** (Lazy-Loaded)
+**Responsibility**: HoLLy-style non-UI SourceMap support
+**Methods**:
+- `GetSourceMapName()` - Resolve the current SourceMap name for a type or member
+- `SetSourceMapName()` - Create or update a SourceMap entry
+- `ListSourceMapEntries()` - Enumerate cached SourceMap entries for an assembly
+- `SaveSourceMap()` / `LoadSourceMap()` - Persist and reload SourceMap XML outside HoLLy UI
+
+---
+
+### 18. **NativeRuntimeTools.cs** (Lazy-Loaded)
+**Responsibility**: Native runtime inspection, export patching, thread control, and DLL injection
+**Methods**:
+- `GetProcAddress()` / `DisassembleNativeFunction()` / `ReadNativeMemory()` - Export and memory inspection
+- `PatchNativeFunction()` / `RevertPatch()` / `ListActivePatches()` - Runtime native patch tracking
+- `SuspendThreads()` / `ResumeThreads()` - Thread freezer helpers
+- `GetPeb()` - Best-effort PEB anti-debug field inspection
+- `InjectNativeDll()` / `InjectManagedDll()` - Native and managed injection helpers
+
+---
+
+### 19. **InterceptionTools.cs** (Lazy-Loaded)
+**Responsibility**: Persistent managed tracing and breakpoint-backed interception
+**Methods**:
+- `TraceMethod()` - Lightweight logging-oriented tracing without changing control flow
+- `HookFunction()` - Break / log / count interception workflow backed by persistent breakpoints
+- `ListActiveInterceptors()` / `GetInterceptorLog()` / `RemoveInterceptor()` - Interceptor lifecycle and log retrieval
 
 ---
 
@@ -243,7 +291,7 @@ Structured logging with levels:
 
 ### **McpSettings.cs**
 Configuration management:
-- Settings persistence via `mcp-config.json` in `%APPDATA%\dnSpy\dnSpy.MCPServer\`
+- JSON-backed config via `mcp-config.json` stored alongside the MCP plugin DLL in dnSpy's output directory
 - WPF settings UI
 - Integration with dnSpy settings system
 - Hot-reload via `reload_mcp_config` tool
@@ -263,7 +311,7 @@ McpServer.ProcessRequest()
 McpTools.ExecuteTool(toolName, args)
     ↓
 ┌─────────────────────────────────────────────────┐
-│ Command Routing (switch statement — 95 cases)   │
+│ Command Routing (switch statement — 133 tools)  │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 ├─ Inline Helpers (McpTools.cs)                   │
@@ -275,16 +323,21 @@ McpTools.ExecuteTool(toolName, args)
 │  ├─ InvokeLazy(assemblyTools, ...)              │
 │  ├─ InvokeLazy(typeTools, ...)                  │
 │  ├─ InvokeLazy(editTools, ...)                  │
-│  ├─ InvokeLazy(resourceTools, ...)              │
 │  ├─ InvokeLazy(debugTools, ...)                 │
 │  ├─ InvokeLazy(dumpTools, ...)                  │
 │  ├─ InvokeLazy(memoryInspectTools, ...)         │
 │  ├─ InvokeLazy(usageFindingCommandTools, ...)   │
 │  ├─ InvokeLazy(codeAnalysisHelpers, ...)        │
+│  ├─ InvokeLazy(controlFlowTools, ...)           │
+│  ├─ InvokeLazy(discoveryTools, ...)             │
 │  ├─ InvokeLazy(de4dotTools, ...)                │
 │  ├─ InvokeLazy(skillsTools, ...)                │
 │  ├─ InvokeLazy(scriptTools, ...)                │
-│  └─ InvokeLazy(windowTools, ...)               │
+│  ├─ InvokeLazy(windowTools, ...)                │
+│  ├─ InvokeLazy(sourceMapTools, ...)             │
+│  ├─ InvokeLazy(nativeRuntimeTools, ...)         │
+│  ├─ InvokeLazy(interceptionTools, ...)          │
+│  └─ InvokeLazy(agentCompatibilityTools, ...)    │
 │                                                 │
 └─────────────────────────────────────────────────┘
     ↓
@@ -308,12 +361,14 @@ TheExtension (MEF Plugin)
     ↓
 [ImportingConstructor]
 McpTools(
-    IDocumentTreeView, IDecompilerService,
     Lazy<AssemblyTools>, Lazy<TypeTools>, Lazy<EditTools>,
-    Lazy<ResourceTools>, Lazy<DebugTools>, Lazy<DumpTools>,
-    Lazy<MemoryInspectTools>, Lazy<UsageFindingCommandTools>,
-    Lazy<CodeAnalysisHelpers>, Lazy<De4dotTools>,
-    Lazy<SkillsTools>, Lazy<ScriptTools>, Lazy<WindowTools>
+    Lazy<DebugTools>, Lazy<DumpTools>, Lazy<MemoryInspectTools>,
+    Lazy<UsageFindingCommandTools>, Lazy<CodeAnalysisHelpers>,
+    Lazy<ControlFlowTools>, Lazy<DiscoveryTools>,
+    Lazy<De4dotExeTool>, Lazy<De4dotTools>,
+    Lazy<SkillsTools>, Lazy<ScriptTools>, Lazy<WindowTools>,
+    Lazy<SourceMapTools>, Lazy<NativeRuntimeTools>,
+    Lazy<InterceptionTools>, Lazy<AgentCompatibilityTools>
 )
     ↓
 McpServer(McpTools)
@@ -330,7 +385,7 @@ McpServer.Start()
 ## Key Design Patterns
 
 ### 1. **Lazy Initialization**
-All 13 service classes are wrapped in `Lazy<T>` to defer MEF construction until first use, reducing startup overhead.
+Core service classes are wrapped in `Lazy<T>` to defer MEF construction until first use, reducing startup overhead and keeping startup responsive even as the tool surface grows past 130 commands.
 
 ### 2. **Reflection-Based Delegation**
 `InvokeLazy<T>(lazy, methodName, arguments)` invokes a method on a lazy-loaded service by name. On `TargetInvocationException` the inner exception is logged and re-thrown, preserving the original stack trace.
@@ -338,7 +393,7 @@ All 13 service classes are wrapped in `Lazy<T>` to defer MEF construction until 
 ### 3. **Partial Class Split**
 `McpTools` is split across two files:
 - `McpTools.cs` — ~370 lines: fields, constructor, `ExecuteTool()` switch, helpers
-- `McpTools.Schemas.cs` — ~1250 lines: `GetAvailableTools()` + 13 `Get*ToolSchemas()` category methods
+- `McpTools.Schemas.cs` — ~2100 lines: `GetAvailableTools()` + 16 `Get*ToolSchemas()` category methods + catalog metadata annotations
 
 This keeps the dispatch logic and schema declarations independently editable.
 
@@ -362,19 +417,22 @@ Usage-finding commands use dnlib IL traversal to identify:
 |----------|---------------------|-------|--------|
 | Assembly | `list_assemblies`, `get_assembly_info`, `list_types`, `load_assembly`, `select_assembly`, `close_assembly`, `close_all_assemblies` | 7 | ✅ |
 | Type | `get_type_info`, `search_types`, `decompile_method`, `decompile_type`, `list_methods_in_type`, `find_path_to_type` | 13 | ✅ |
-| Method / IL | `get_method_il`, `get_method_il_bytes`, `get_method_exception_handlers`, `dump_cordbg_il` | 4 | ✅ |
+| Method / IL | `decompile_method`, `get_method_il`, `get_method_il_bytes`, `get_method_exception_handlers`, `dump_cordbg_il` | 5 | ✅ |
 | Analysis | `find_who_calls_method`, `find_who_uses_type`, `find_who_reads_field`, `find_who_writes_field`, `analyze_type_inheritance`, `analyze_call_graph`, `find_dependency_chain`, `find_dead_code` | 9 | ✅ |
-| Edit | `change_member_visibility`, `rename_member`, `save_assembly`, `get/edit_assembly_metadata`, `set_assembly_flags`, `list/add/remove_assembly_reference`, `inject_type_from_dll`, `patch_method_to_ret` | 13 | ✅ |
+| Control Flow | `get_control_flow_graph`, `get_basic_blocks` | 2 | ✅ |
+| Edit | `change_member_visibility`, `rename_member`, `save_assembly`, `get/edit_assembly_metadata`, `set_assembly_flags`, `list/add/remove_assembly_reference`, `inject_type_from_dll`, `patch_method_to_ret` | 15 | ✅ |
+| Agent Compatibility | `get_class_sourcecode`, `get_method_sourcecode`, `get_function_opcodes`, `set_function_opcodes`, `overwrite_full_function_opcodes`, `update_method_sourcecode` | 6 | ✅ |
 | Resource | `list_resources`, `get_resource`, `add_resource`, `remove_resource`, `extract_costura` | 5 | ✅ |
-| Debug | `get_debugger_state`, `list/set(+condition)/remove/clear_breakpoints`, `continue/break/stop_debugger`, `get_call_stack`, `step_over`, `step_into`, `step_out`, `get_current_location`, `wait_for_pause`, `start_debugging`, `attach_to_process` | 16 | ✅ |
-| Memory / PE | `list_runtime_modules`, `dump_module_unpacked`, `read_process_memory`, `write_process_memory`, `get_pe_sections`, `dump_pe_section`, `scan_pe_strings`, `unpack_from_memory` | 10 | ✅ |
-| Runtime Inspect | `get_local_variables`, `eval_expression` | 2 | ✅ |
+| Debug / Interception | `get_debugger_state`, `list/set(+condition)/remove/clear_breakpoints`, `trace_method`, `hook_function`, `get_call_stack`, `step_over`, `step_into`, `step_out`, `get_current_location`, `wait_for_pause`, `start_debugging`, `attach_to_process` | 27 | ✅ |
+| Memory / PE | `list_runtime_modules`, `dump_module_unpacked`, `read_process_memory`, `write_process_memory`, `get_pe_sections`, `dump_pe_section`, `scan_pe_strings`, `unpack_from_memory` | 12 | ✅ |
 | Deobfuscation | `list_deobfuscators`, `detect_obfuscator`, `deobfuscate_assembly`, `save_deobfuscated`, `run_de4dot` | 5 | ✅ |
 | Skills | `list_skills`, `get_skill`, `save_skill`, `search_skills`, `delete_skill` | 5 | ✅ |
 | Scripting | `run_script` | 1 | ✅ |
 | Window / Dialog | `list_dialogs`, `close_dialog` | 2 | ✅ |
+| SourceMap | `get_source_map_name`, `set_source_map_name`, `list_source_map_entries`, `save_source_map`, `load_source_map` | 5 | ✅ |
+| Native Runtime | `get_proc_address`, `patch_native_function`, `disassemble_native_function`, `inject_native_dll`, `inject_managed_dll`, `revert_patch`, `list_active_patches`, `read_native_memory`, `suspend_threads`, `resume_threads`, `get_peb` | 11 | ✅ |
 | Utility | `list_tools`, `get_mcp_config`, `reload_mcp_config` | 3 | ✅ |
-| **Total** | | **95** | ✅ |
+| **Total** | | **133** | ✅ |
 
 ---
 
