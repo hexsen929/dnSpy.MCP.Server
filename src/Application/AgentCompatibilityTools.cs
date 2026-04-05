@@ -614,7 +614,9 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			catch {
 			}
 
-			return paths.Select(path => MetadataReference.CreateFromFile(path)).ToList();
+			return paths
+				.Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
+				.ToList();
 		}
 
 		CilBody CloneMethodBodyIntoTarget(TypeDef sourceType, MethodDef sourceMethod, TypeDef targetType, MethodDef targetMethod) {
