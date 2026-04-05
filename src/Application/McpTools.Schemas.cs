@@ -859,6 +859,114 @@ namespace dnSpy.MCP.Server.Application
                     ["required"] = new List<string> { "assembly_name", "type_full_name", "method_name" }
                 }
             },
+            new ToolInfo {
+                Name = "get_class_sourcecode",
+                Description = "AgentSmithers-style compatibility alias for full-type decompilation to C# source code.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Preferred: full type name including namespace" },
+                        ["namespace"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: namespace containing the class" },
+                        ["class_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: simple class/type name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional full file path to disambiguate duplicate assembly names" }
+                    },
+                    ["required"] = new List<string> { "assembly_name" }
+                }
+            },
+            new ToolInfo {
+                Name = "get_method_sourcecode",
+                Description = "AgentSmithers-style compatibility alias for single-method C# decompilation.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Preferred: full type name including namespace" },
+                        ["namespace"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: namespace containing the class" },
+                        ["class_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: simple class/type name" },
+                        ["method_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Method name to decompile" },
+                        ["method_token"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional metadata token (hex or decimal) to disambiguate overloads" },
+                        ["parameter_count"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional overload disambiguator: number of normal method parameters" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional full file path to disambiguate duplicate assembly names" }
+                    },
+                    ["required"] = new List<string> { "assembly_name", "method_name" }
+                }
+            },
+            new ToolInfo {
+                Name = "get_function_opcodes",
+                Description = "Return method IL with stable line indexes, opcode names, operands, and metadata token in an AgentSmithers-friendly shape.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Preferred: full type name including namespace" },
+                        ["namespace"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: namespace containing the class" },
+                        ["class_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: simple class/type name" },
+                        ["method_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Method name to inspect" },
+                        ["method_token"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional metadata token (hex or decimal) to disambiguate overloads" },
+                        ["parameter_count"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional overload disambiguator: number of normal method parameters" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional full file path to disambiguate duplicate assembly names" }
+                    },
+                    ["required"] = new List<string> { "assembly_name", "method_name" }
+                }
+            },
+            new ToolInfo {
+                Name = "set_function_opcodes",
+                Description = "Insert or overwrite IL instructions at a given method line index. Supports basic literals, strings, method refs, field refs, type refs, args, and locals. Branch/switch targets are not yet supported.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Preferred: full type name including namespace" },
+                        ["namespace"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: namespace containing the class" },
+                        ["class_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: simple class/type name" },
+                        ["method_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Method name to modify" },
+                        ["method_token"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional metadata token (hex or decimal) to disambiguate overloads" },
+                        ["parameter_count"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional overload disambiguator: number of normal method parameters" },
+                        ["il_opcodes"] = new Dictionary<string, object> { ["type"] = "array", ["description"] = "Array of opcode lines such as 'Ldstr Hello' or 'Call System.Console::WriteLine(System.String)'" },
+                        ["il_line_number"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "0-based instruction index where the splice should occur" },
+                        ["mode"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "append, insert, or overwrite (default append)" }
+                    },
+                    ["required"] = new List<string> { "assembly_name", "method_name", "il_opcodes", "il_line_number" }
+                }
+            },
+            new ToolInfo {
+                Name = "overwrite_full_function_opcodes",
+                Description = "Replace an entire method body with the supplied IL instruction lines. Compatibility equivalent of AgentSmithers' Overwrite_Full_Func_Opcodes.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Preferred: full type name including namespace" },
+                        ["namespace"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: namespace containing the class" },
+                        ["class_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: simple class/type name" },
+                        ["method_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Method name to replace" },
+                        ["method_token"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional metadata token (hex or decimal) to disambiguate overloads" },
+                        ["parameter_count"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional overload disambiguator: number of normal method parameters" },
+                        ["il_opcodes"] = new Dictionary<string, object> { ["type"] = "array", ["description"] = "Full replacement IL instruction list" }
+                    },
+                    ["required"] = new List<string> { "assembly_name", "method_name", "il_opcodes" }
+                }
+            },
+            new ToolInfo {
+                Name = "update_method_sourcecode",
+                Description = "Compile a replacement method body from C# statements and swap the target method's IL in-memory. Best for quick body patches that mostly depend on parameters and framework APIs.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Preferred: full type name including namespace" },
+                        ["namespace"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: namespace containing the class" },
+                        ["class_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Legacy compatibility: simple class/type name" },
+                        ["method_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Method name to replace" },
+                        ["method_token"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional metadata token (hex or decimal) to disambiguate overloads" },
+                        ["parameter_count"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional overload disambiguator: number of normal method parameters" },
+                        ["source"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "C# statements that become the body of the replacement method" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional full file path to disambiguate duplicate assembly names" }
+                    },
+                    ["required"] = new List<string> { "assembly_name", "method_name", "source" }
+                }
+            },
         };
 
         // ── Resource tools ────────────────────────────────────────────────────────
@@ -1982,6 +2090,24 @@ namespace dnSpy.MCP.Server.Application
                 break;
             case "list_properties_in_type":
                 metadata.Notes = "Detail property enumeration. Prefer get_type_info first when exploring a type.";
+                break;
+            case "get_class_sourcecode":
+                metadata.Notes = "AgentSmithers-style convenience alias for full-type decompilation.";
+                break;
+            case "get_method_sourcecode":
+                metadata.Notes = "AgentSmithers-style convenience alias for single-method C# output.";
+                break;
+            case "get_function_opcodes":
+                metadata.Notes = "AgentSmithers-style IL listing with stable line indexes that pair with set_function_opcodes.";
+                break;
+            case "set_function_opcodes":
+                metadata.Notes = "Direct IL splicing workflow. Best for targeted edits when patch_method_to_ret is too coarse.";
+                break;
+            case "overwrite_full_function_opcodes":
+                metadata.Notes = "Full method-body IL replacement. Prefer set_function_opcodes for smaller edits.";
+                break;
+            case "update_method_sourcecode":
+                metadata.Notes = "Direct source-body patch workflow. Works best for self-contained bodies that mostly depend on parameters and framework APIs.";
                 break;
             case "list_tools":
                 metadata.Notes = "Default mode hides tools marked hidden_by_default. Use mode='full' or include_hidden=true for the complete catalog.";

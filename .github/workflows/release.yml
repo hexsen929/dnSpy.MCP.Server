@@ -1,0 +1,83 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target_framework:
+          - net48
+          - net10.0-windows
+
+    steps:
+      - name: Checkout extension repository
+        uses: actions/checkout@v4
+        with:
+          path: extension-src
+
+      - name: Checkout dnSpyEx source tree
+        uses: actions/checkout@v4
+        with:
+          repository: dnSpyEx/dnSpy
+          submodules: recursive
+          path: dnspy-src
+
+      - name: Setup .NET SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Overlay forked extension into dnSpy source tree
+        shell: pwsh
+        run: |
+          $target = Join-Path $PWD 'dnspy-src/Extensions/dnSpy.MCP.Server'
+          if (Test-Path $target) {
+            Remove-Item $target -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          Copy-Item (Join-Path $PWD 'extension-src/*') $target -Recurse -Force
+
+      - name: Restore and build ${{ matrix.target_framework }}
+        shell: pwsh
+        run: |
+          dotnet restore dnspy-src/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj
+          dotnet build dnspy-src/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj `
+            -c Release `
+            -f ${{ matrix.target_framework }} `
+            --no-restore
+
+      - name: Package release artifact
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem dnspy-src -Recurse -Filter 'dnSpy.MCP.Server.x.dll' |
+            Where-Object { $_.FullName -match [regex]::Escape("${{ matrix.target_framework }}") } |
+            Select-Object -First 1
+
+          if (-not $dll) {
+            throw "dnSpy.MCP.Server.x.dll for target ${{ matrix.target_framework }} was not found."
+          }
+
+          $outDir = $dll.Directory.FullName
+          $artifactDir = Join-Path $PWD "release-assets/${{ matrix.target_framework }}"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+          Copy-Item (Join-Path $outDir '*') $artifactDir -Recurse -Force
+
+          $zipPath = Join-Path $PWD "release-assets/dnSpy.MCP.Server-${{ matrix.target_framework }}.zip"
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+          Compress-Archive -Path (Join-Path $artifactDir '*') -DestinationPath $zipPath
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/dnSpy.MCP.Server-${{ matrix.target_framework }}.zip

@@ -52,6 +52,7 @@ namespace dnSpy.MCP.Server.Application
         readonly Lazy<SourceMapTools> sourceMapTools;
         readonly Lazy<NativeRuntimeTools> nativeRuntimeTools;
         readonly Lazy<InterceptionTools> interceptionTools;
+        readonly Lazy<AgentCompatibilityTools> agentCompatibilityTools;
 
         [ImportingConstructor]
         public McpTools(
@@ -72,7 +73,8 @@ namespace dnSpy.MCP.Server.Application
             Lazy<WindowTools> windowTools,
             Lazy<SourceMapTools> sourceMapTools,
             Lazy<NativeRuntimeTools> nativeRuntimeTools,
-            Lazy<InterceptionTools> interceptionTools
+            Lazy<InterceptionTools> interceptionTools,
+            Lazy<AgentCompatibilityTools> agentCompatibilityTools
             )
         {
             this.assemblyTools = assemblyTools;
@@ -93,6 +95,7 @@ namespace dnSpy.MCP.Server.Application
             this.sourceMapTools = sourceMapTools;
             this.nativeRuntimeTools = nativeRuntimeTools;
             this.interceptionTools = interceptionTools;
+            this.agentCompatibilityTools = agentCompatibilityTools;
         }
 
         // GetAvailableTools() is defined in McpTools.Schemas.cs (partial class)
@@ -148,6 +151,12 @@ namespace dnSpy.MCP.Server.Application
                     "list_events_in_type" => InvokeLazy(editTools, "ListEventsInType", arguments),
                     "get_custom_attributes" => InvokeLazy(editTools, "GetCustomAttributes", arguments),
                     "list_nested_types" => InvokeLazy(editTools, "ListNestedTypes", arguments),
+                    "get_class_sourcecode" => InvokeLazy(agentCompatibilityTools, "GetClassSourcecode", arguments),
+                    "get_method_sourcecode" => InvokeLazy(agentCompatibilityTools, "GetMethodSourcecode", arguments),
+                    "get_function_opcodes" => InvokeLazy(agentCompatibilityTools, "GetFunctionOpcodes", arguments),
+                    "set_function_opcodes" => InvokeLazy(agentCompatibilityTools, "SetFunctionOpcodes", arguments),
+                    "overwrite_full_function_opcodes" => InvokeLazy(agentCompatibilityTools, "OverwriteFullFunctionOpcodes", arguments),
+                    "update_method_sourcecode" => InvokeLazy(agentCompatibilityTools, "UpdateMethodSourcecode", arguments),
 
                     // Previously-hidden TypeTools
                     "get_type_fields" => InvokeLazy(typeTools, "GetTypeFields", arguments),
@@ -269,6 +278,14 @@ namespace dnSpy.MCP.Server.Application
                     "suspend_threads" => InvokeLazy(nativeRuntimeTools, "SuspendThreads", arguments),
                     "resume_threads" => InvokeLazy(nativeRuntimeTools, "ResumeThreads", arguments),
                     "get_peb" => InvokeLazy(nativeRuntimeTools, "GetPeb", arguments),
+
+                    // AgentSmithers compatibility aliases
+                    "Get_Class_Sourcecode" => InvokeLazy(agentCompatibilityTools, "GetClassSourcecode", arguments),
+                    "Get_Method_SourceCode" => InvokeLazy(agentCompatibilityTools, "GetMethodSourcecode", arguments),
+                    "Get_Function_Opcodes" => InvokeLazy(agentCompatibilityTools, "GetFunctionOpcodes", arguments),
+                    "Set_Function_Opcodes" => InvokeLazy(agentCompatibilityTools, "SetFunctionOpcodes", arguments),
+                    "Overwrite_Full_Func_Opcodes" => InvokeLazy(agentCompatibilityTools, "OverwriteFullFunctionOpcodes", arguments),
+                    "Update_Method_SourceCode" => InvokeLazy(agentCompatibilityTools, "UpdateMethodSourcecode", arguments),
 
                     _ => new CallToolResult
                     {
