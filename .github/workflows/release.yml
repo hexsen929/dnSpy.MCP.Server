@@ -29,6 +29,13 @@ jobs:
           submodules: recursive
           path: dnspy-src
 
+      - name: Checkout HoLLy Echo dependency
+        uses: actions/checkout@v4
+        with:
+          repository: holly-hacker/dnSpy.Extension.HoLLy
+          submodules: recursive
+          path: dnspy-src/Extensions/dnSpy.Extension.HoLLy
+
       - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:

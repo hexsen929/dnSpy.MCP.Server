@@ -1340,30 +1340,31 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			if (string.IsNullOrEmpty(value))
 				return string.Empty;
 
-				return value
-					.Replace("global::", string.Empty, StringComparison.Ordinal)
-					.Replace("/", ".")
-					.Replace("+", ".")
-					.Replace(" ", string.Empty)
-					.ReplaceTypeAlias("bool", "System.Boolean")
-					.ReplaceTypeAlias("byte", "System.Byte")
-					.ReplaceTypeAlias("sbyte", "System.SByte")
-					.ReplaceTypeAlias("short", "System.Int16")
-					.ReplaceTypeAlias("ushort", "System.UInt16")
-					.ReplaceTypeAlias("int", "System.Int32")
-					.ReplaceTypeAlias("uint", "System.UInt32")
-					.ReplaceTypeAlias("long", "System.Int64")
-					.ReplaceTypeAlias("ulong", "System.UInt64")
-					.ReplaceTypeAlias("float", "System.Single")
-					.ReplaceTypeAlias("double", "System.Double")
-					.ReplaceTypeAlias("string", "System.String")
-					.ReplaceTypeAlias("object", "System.Object")
-					.ReplaceTypeAlias("char", "System.Char")
-					.ReplaceTypeAlias("void", "System.Void")
-					.ToLowerInvariant();
+			value = value
+				.Replace("global::", string.Empty, StringComparison.Ordinal)
+				.Replace("/", ".")
+				.Replace("+", ".")
+				.Replace(" ", string.Empty);
+
+			value = ReplaceTypeAlias(value, "bool", "System.Boolean");
+			value = ReplaceTypeAlias(value, "byte", "System.Byte");
+			value = ReplaceTypeAlias(value, "sbyte", "System.SByte");
+			value = ReplaceTypeAlias(value, "short", "System.Int16");
+			value = ReplaceTypeAlias(value, "ushort", "System.UInt16");
+			value = ReplaceTypeAlias(value, "int", "System.Int32");
+			value = ReplaceTypeAlias(value, "uint", "System.UInt32");
+			value = ReplaceTypeAlias(value, "long", "System.Int64");
+			value = ReplaceTypeAlias(value, "ulong", "System.UInt64");
+			value = ReplaceTypeAlias(value, "float", "System.Single");
+			value = ReplaceTypeAlias(value, "double", "System.Double");
+			value = ReplaceTypeAlias(value, "string", "System.String");
+			value = ReplaceTypeAlias(value, "object", "System.Object");
+			value = ReplaceTypeAlias(value, "char", "System.Char");
+			value = ReplaceTypeAlias(value, "void", "System.Void");
+			return value.ToLowerInvariant();
 		}
 
-		static string ReplaceTypeAlias(this string input, string alias, string fullName) =>
+		static string ReplaceTypeAlias(string input, string alias, string fullName) =>
 			string.Equals(input, alias, StringComparison.Ordinal) ? fullName : input;
 
 		static string RequireOperand(ParsedInstructionSpec spec) =>
