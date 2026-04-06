@@ -18,6 +18,13 @@
 - if you want the old 137-tool filtered view back, set `toolCatalogMode` to `default`
 - disabled tools are removed from both `tools/list` and `list_tools`, and direct `tools/call` attempts are rejected with a policy error
 
+### Documentation
+
+- clarified policy precedence:
+  - request `mode` / `include_hidden` overrides configured default listing mode
+  - then client `toolCatalogMode` overrides global `toolCatalogMode`
+  - final disabled tools are the union of global + matching client deny lists
+
 ---
 
 ## v1.8.22 — 2026-04-07

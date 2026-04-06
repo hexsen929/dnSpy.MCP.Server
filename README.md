@@ -1122,6 +1122,22 @@ The tool catalog now exposes metadata intended to improve client-side discoverab
 
 `tools/list` now returns the full 143-tool base catalog by default. If you want the old filtered view back, set `toolCatalogMode` to `"default"` in `mcp-config.json`, or pass `mode="default"` in the request. `list_tools` mirrors the same behavior and returns the same catalog metadata in-band. Global `disabledTools` and per-client `clientToolPolicies` remove tools from both `tools/list` and `tools/call`.
 
+Policy precedence:
+
+1. request params on `tools/list` / `list_tools` (`mode`, `include_hidden`)
+2. matching `clientToolPolicies[*].toolCatalogMode`
+3. global `toolCatalogMode`
+
+For disabled tools there is no override hierarchy. The final denylist is the union of:
+
+- global `disabledTools`
+- all matching `clientToolPolicies[*].disabledTools`
+
+This means:
+
+- a client-specific policy can further restrict tools
+- a client-specific policy cannot re-enable a globally disabled tool
+
 | File | Responsibility |
 |------|---------------|
 | `src/Communication/McpServer.cs` | Streamable HTTP listener and JSON-RPC dispatch |
@@ -1263,6 +1279,39 @@ Example: keep the full catalog globally, but hide selected runtime mutation tool
   ]
 }
 ```
+
+Policy behavior summary:
+
+- `toolCatalogMode` supports `full` and `default`
+- `all` is accepted as an alias of `full`
+- `filtered` is accepted as an alias of `default`
+- if a client sends `tools/list` with `mode` or `include_hidden`, that request overrides the configured default listing mode for that call only
+- `disabledTools` always wins over catalog visibility; a disabled tool is removed from listings and rejected on direct `tools/call`
+
+Example precedence:
+
+```json
+{
+  "toolCatalogMode": "full",
+  "disabledTools": ["run_script"],
+  "clientToolPolicies": [
+    {
+      "clientNamePattern": "Claude",
+      "toolCatalogMode": "default",
+      "disabledTools": ["write_process_memory"]
+    }
+  ]
+}
+```
+
+Effective result:
+
+- Claude:
+  - listing mode defaults to `default`
+  - disabled tools = `run_script` + `write_process_memory`
+- Codex:
+  - listing mode defaults to `full`
+  - disabled tools = `run_script`
 
 > **Remote access** — when `listenerMode` is `httpListener` and `host` is `"0.0.0.0"` or `"*"`, the server binds with the HttpListener wildcard `+`. This requires a one-time URL ACL reservation (run as Administrator):
 > ```

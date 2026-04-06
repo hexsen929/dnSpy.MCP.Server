@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools/list`, `list_tools`, and `tools/call` now all honor global/per-client tool disable rules from `mcp-config.json`.
 - Session state now records `initialize.clientInfo.name` / `initialize.clientInfo.version`, allowing different Claude/Codex/client-specific tool policies.
 
+### Documentation
+- README now documents policy precedence explicitly:
+  - request `mode` / `include_hidden` > client `toolCatalogMode` > global `toolCatalogMode`
+  - final disabled tools = global `disabledTools` ∪ matching client `disabledTools`
+
 ## [1.8.22] - 2026-04-07
 
 ### Changed
