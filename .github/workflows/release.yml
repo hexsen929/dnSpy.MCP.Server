@@ -66,20 +66,16 @@ jobs:
       - name: Restore and build ${{ matrix.target_framework }}
         shell: pwsh
         run: |
-          $mcpOutDir = Join-Path $PWD "pack-out/${{ matrix.target_framework }}/mcp"
-          $proxyOutDir = Join-Path $PWD "pack-out/${{ matrix.target_framework }}/stdio-proxy"
-          New-Item -ItemType Directory -Force -Path $mcpOutDir | Out-Null
-          New-Item -ItemType Directory -Force -Path $proxyOutDir | Out-Null
-
           dotnet restore dnspy-src/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj
           dotnet restore extension-src/tools/dnSpy.MCP.StdioProxy/dnSpy.MCP.StdioProxy.csproj
+
           dotnet build dnspy-src/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj `
             -c Release `
             -f ${{ matrix.target_framework }} `
-            -p:OutputPath="$mcpOutDir/" `
-            -p:AppendTargetFrameworkToOutputPath=false `
-            -p:AppendRuntimeIdentifierToOutputPath=false `
             --no-restore
+
+          $proxyOutDir = Join-Path $PWD "pack-out/${{ matrix.target_framework }}/stdio-proxy"
+          New-Item -ItemType Directory -Force -Path $proxyOutDir | Out-Null
           dotnet build extension-src/tools/dnSpy.MCP.StdioProxy/dnSpy.MCP.StdioProxy.csproj `
             -c Release `
             -p:OutputPath="$proxyOutDir/" `
@@ -90,27 +86,23 @@ jobs:
       - name: Package release artifact
         shell: pwsh
         run: |
-          $outDir = Join-Path $PWD "pack-out/${{ matrix.target_framework }}/mcp"
-          $dll = Get-ChildItem $outDir -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
+          # --- Locate the MCP DLL from wherever MSBuild actually placed it ---
+          $dll = Get-ChildItem 'dnspy-src' -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch '[\\/]obj[\\/]' } |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
-
-          if (-not $dll) {
-            $dll = Get-ChildItem $PWD -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
-              Where-Object { $_.FullName -notmatch '[\\/]+obj[\\/]' } |
-              Sort-Object LastWriteTimeUtc -Descending |
-              Select-Object -First 1
-          }
 
           if (-not $dll) {
             throw "dnSpy.MCP.Server.x.dll for target ${{ matrix.target_framework }} was not found."
           }
 
-          Write-Host "Packaging MCP DLL from: $($dll.FullName)"
+          $buildOutDir = $dll.Directory.FullName
+          Write-Host "Found MCP DLL at: $($dll.FullName)"
 
           $artifactDir = Join-Path $PWD "release-assets/${{ matrix.target_framework }}"
           New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
 
+          # --- Collect MCP extension files from the build output directory ---
           $includePatterns = @(
             'dnSpy.MCP.Server.x.dll',
             'dnSpy.MCP.Server.x.pdb',
@@ -123,10 +115,11 @@ jobs:
           )
 
           foreach ($pattern in $includePatterns) {
-            Get-ChildItem -Path $outDir -Filter $pattern -File -ErrorAction SilentlyContinue |
+            Get-ChildItem -Path $buildOutDir -Filter $pattern -File -ErrorAction SilentlyContinue |
               Copy-Item -Destination $artifactDir -Force
           }
 
+          # --- Collect stdio-proxy files ---
           $proxyOutDir = Join-Path $PWD "pack-out/${{ matrix.target_framework }}/stdio-proxy"
           if (Test-Path $proxyOutDir) {
             $proxyArtifactDir = Join-Path $artifactDir 'stdio-proxy'
