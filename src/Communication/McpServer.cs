@@ -19,6 +19,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.ComponentModel.Composition;
 using System.IO;
 using System.Net;
@@ -624,7 +625,7 @@ namespace dnSpy.MCP.Server.Communication {
 			return false;
 		}
 
-		static Dictionary<string, string> CopyHeaders(WebHeaderCollection headers) {
+		static Dictionary<string, string> CopyHeaders(NameValueCollection headers) {
 			var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 			foreach (var key in headers.AllKeys) {
 				if (key == null)
