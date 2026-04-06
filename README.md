@@ -1261,6 +1261,12 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 | `de4dotSearchPaths` | `[]` | Extra directories to search for `de4dot.exe` (absolute or relative to this file). |
 | `de4dotMaxSearchDepth` | `6` | Directory levels to walk upward when auto-discovering a sibling `de4dot` repository. |
 
+`enableRunScript` is a separate execution gate for `run_script`; it does not conflict with `disabledTools`.
+
+- `enableRunScript: false` means `run_script` execution is blocked even if the tool is still visible in listings
+- adding `run_script` to `disabledTools` (global or client-specific) hides it from listings and blocks the call earlier at the policy layer
+- if you want `run_script` to be both invisible and unusable, keep `enableRunScript: false` and also add `run_script` to `disabledTools`
+
 Example: globally disable a few tools for every client:
 
 ```json
