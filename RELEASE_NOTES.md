@@ -2,6 +2,17 @@
 
 ---
 
+## v1.8.8 — 2026-04-06
+
+### Fixed: POST-only `/mcp` for streamable HTTP
+
+- disabled the long-lived `GET /mcp` SSE stream path
+- `/mcp` now behaves like `ida-pro-mcp`: POST requests carry initialize/list/call traffic directly
+- legacy SSE remains available on `/sse` + `/message`
+- intended to avoid CrossOver / Wine `HttpListener` instability with concurrent `GET /mcp` event streams
+
+---
+
 ## v1.8.7 — 2026-04-06
 
 ### Changed: Sessionless discovery for MCP clients

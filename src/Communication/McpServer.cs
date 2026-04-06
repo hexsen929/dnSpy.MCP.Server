@@ -150,7 +150,7 @@ namespace dnSpy.MCP.Server.Communication {
 						McpLogger.Info($"Host: {settings.Host}");
 						McpLogger.Info($"Port: {actualPort}");
 						McpLogger.Info($"Prefix: {prefix}");
-						McpLogger.Info("Routes: GET /sse, POST /message, GET|POST|DELETE /mcp, GET /health");
+						McpLogger.Info("Routes: GET /sse, POST /message, POST|DELETE /mcp, GET /health");
 						McpLogger.Info("═══════════════════════════════════════════════════════");
 
 						await BroadcastStatusAsync("running", cancellationToken).ConfigureAwait(false);

@@ -24,45 +24,10 @@ namespace dnSpy.MCP.Server.Transports {
 		}
 
 		public async Task HandleGetAsync(HttpListenerContext context, CancellationToken cancellationToken) {
-			var acceptsSse = (context.Request.Headers["Accept"] ?? string.Empty).IndexOf("text/event-stream", StringComparison.OrdinalIgnoreCase) >= 0;
-			if (!acceptsSse) {
-				await McpProtocolHelpers.WriteJsonAsync(context.Response, (int)HttpStatusCode.MethodNotAllowed, new {
-					error = "Use POST /mcp for JSON-RPC requests or GET /mcp with Accept: text/event-stream for an SSE stream.",
-				}, cancellationToken).ConfigureAwait(false);
-				return;
-			}
-
-			var sessionId = context.Request.Headers[McpProtocolHelpers.SessionHeaderName];
-			if (!sessionManager.TryGetSession(sessionId, out var session) || session?.Transport != McpTransportKind.StreamableHttp || string.IsNullOrWhiteSpace(sessionId)) {
-				McpLogger.Warning($"mcp.stream.invalid-session transport=streamable-http sessionId={sessionId ?? "-"} remote={context.Request.RemoteEndPoint}");
-				await McpProtocolHelpers.WriteJsonRpcErrorAsync(context.Response, HttpStatusCode.NotFound, null, -32001, "Unknown or expired streamable HTTP session.", new { sessionId }, cancellationToken).ConfigureAwait(false);
-				return;
-			}
-
-			McpProtocolHelpers.PrepareSseResponse(context.Response);
-			var connection = new SseConnection(sessionId, context.Response);
-			streams.AddOrUpdate(sessionId, connection, (_, existing) => {
-				existing.Dispose();
-				return connection;
-			});
-			sessionManager.TouchSession(sessionId);
-
-			McpLogger.Info($"mcp.stream.connected transport=streamable-http sessionId={sessionId} remote={context.Request.RemoteEndPoint}");
-
-			try {
-				await connection.SendEventAsync("ready", JsonSerializer.Serialize(new {
-					sessionId,
-					transport = "streamable-http",
-				}, McpProtocolHelpers.JsonOptions), cancellationToken).ConfigureAwait(false);
-				await connection.SendEventAsync("status", CreateStatusPayload("running"), cancellationToken).ConfigureAwait(false);
-				await RunHeartbeatLoopAsync(connection, cancellationToken).ConfigureAwait(false);
-			}
-			catch (Exception ex) {
-				McpLogger.Exception(ex, $"mcp.stream.connected transport=streamable-http sessionId={sessionId}");
-			}
-			finally {
-				RemoveConnection(sessionId, removeSession: false);
-			}
+			McpLogger.Info($"mcp.stream.get-disabled transport=streamable-http remote={context.Request.RemoteEndPoint}");
+			await McpProtocolHelpers.WriteJsonAsync(context.Response, (int)HttpStatusCode.MethodNotAllowed, new {
+				error = "GET /mcp is disabled. Use POST /mcp for streamable HTTP requests. Use /sse only for the legacy SSE transport.",
+			}, cancellationToken).ConfigureAwait(false);
 		}
 
 		public async Task HandlePostAsync(HttpListenerContext context, CancellationToken cancellationToken) {

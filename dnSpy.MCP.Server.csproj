@@ -4,10 +4,10 @@
 
   <PropertyGroup>
     <AssemblyName>dnSpy.MCP.Server.x</AssemblyName>
-    <Version>1.8.7</Version>
-    <AssemblyVersion>1.8.7.0</AssemblyVersion>
-    <FileVersion>1.8.7.0</FileVersion>
-    <InformationalVersion>1.8.7</InformationalVersion>
+    <Version>1.8.8</Version>
+    <AssemblyVersion>1.8.8.0</AssemblyVersion>
+    <FileVersion>1.8.8.0</FileVersion>
+    <InformationalVersion>1.8.8</InformationalVersion>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>..\..\dnSpy.snk</AssemblyOriginatorKeyFile>
     <OutputPath>..\..\dnSpy\dnSpy\bin\$(Configuration)\</OutputPath>

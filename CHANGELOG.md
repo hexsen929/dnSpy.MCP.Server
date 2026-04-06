@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.8] - 2026-04-06
+
+### Fixed
+- Disabled `GET /mcp` SSE streaming for the streamable HTTP transport and reverted `/mcp` to POST-driven request/response behavior, matching the simpler pattern used by `ida-pro-mcp`.
+- Keeps legacy SSE available on `/sse` + `/message`, while avoiding the long-lived `/mcp` event stream path that was hanging under CrossOver/Wine and causing Claude Code to stall on capability discovery.
+
 ## [1.8.7] - 2026-04-06
 
 ### Changed
