@@ -2,6 +2,22 @@
 
 ---
 
+## v1.8.10 — 2026-04-06
+
+### Fixed: AgentSmithers alias routing + dnlib compatibility
+
+- `tools/call` now normalizes the original AgentSmithers names to their canonical tool names:
+  - `Get_Class_Sourcecode`
+  - `Get_Method_SourceCode`
+  - `Get_Function_Opcodes`
+  - `Set_Function_Opcodes`
+  - `Overwrite_Full_Func_Opcodes`
+  - `Update_Method_SourceCode`
+- net48 startup now installs a `dnlib` compatibility resolver so direct-edit tools can reuse dnSpyEx's shipped `dnlib 4.4.0.0` when some call paths still request `4.5.0.0`
+- README now explicitly documents the catalog split: 137 tools in default mode, 143 in full mode
+
+---
+
 ## v1.8.9 — 2026-04-06
 
 ### New: Selectable listener backend

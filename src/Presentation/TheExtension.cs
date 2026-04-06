@@ -50,6 +50,7 @@ namespace dnSpy.MCP.Server.Presentation {
 			McpLogger.Info("MCP Extension - Constructor");
 			McpLogger.Info(LogSeparator);
 
+			AssemblyCompatibilityBootstrapper.EnsureInstalled();
 			AttachServerToSettings();
 		}
 
@@ -121,7 +122,6 @@ namespace dnSpy.MCP.Server.Presentation {
 		}
 	}
 }
-
 
 
 

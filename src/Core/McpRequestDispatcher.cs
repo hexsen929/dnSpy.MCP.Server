@@ -103,7 +103,7 @@ namespace dnSpy.MCP.Server.Core {
 			var toolName = McpProtocolHelpers.GetString(context.Request.Params, "name");
 			if (string.IsNullOrWhiteSpace(toolName))
 				throw new McpProtocolException(-32602, "Tool call requires a non-empty 'name' parameter.");
-			var normalizedToolName = toolName!;
+			var normalizedToolName = toolRegistry.NormalizeToolName(toolName!);
 
 			if (!toolRegistry.ContainsTool(normalizedToolName))
 				throw new McpProtocolException(-32602, $"Unknown tool: {normalizedToolName}", HttpStatusCode.BadRequest, new { name = normalizedToolName });

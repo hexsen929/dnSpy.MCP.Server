@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.10] - 2026-04-06
+
+### Fixed
+- AgentSmithers legacy aliases are now normalized before `tools/call` validation, so callers can use the original names (`Get_Class_Sourcecode`, `Get_Method_SourceCode`, `Get_Function_Opcodes`, `Set_Function_Opcodes`, `Overwrite_Full_Func_Opcodes`, `Update_Method_SourceCode`) without being rejected as unknown tools.
+- Added a startup-time `dnlib` compatibility resolver for the net48 plugin so direct-edit tools can reuse the host dnSpy `dnlib` load instead of failing on `dnlib, Version=4.5.0.0` vs `4.4.0.0` binding mismatches under dnSpyEx.
+
+### Changed
+- README now clarifies the tool catalog split: 137 tools by default, 143 when hidden-by-default tools are included.
+
 ## [1.8.9] - 2026-04-06
 
 ### Added
