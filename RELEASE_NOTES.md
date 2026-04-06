@@ -2,6 +2,15 @@
 
 ---
 
+## v1.8.18 — 2026-04-06
+
+### Fixed: workspace-wide fallback for net48 packaging
+
+- if the explicit `pack-out` staging directory is still empty for net48, CI now falls back to a workspace-wide search for the newest non-`obj` `dnSpy.MCP.Server.x.dll`
+- this targets the exact failure you reported: build succeeds, but the staged net48 DLL is still not where packaging expects it
+
+---
+
 ## v1.8.17 — 2026-04-06
 
 ### Fixed: disable suffixing in pack-out staging

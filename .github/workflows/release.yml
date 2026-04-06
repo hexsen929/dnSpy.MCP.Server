@@ -89,6 +89,13 @@ jobs:
             Select-Object -First 1
 
           if (-not $dll) {
+            $dll = Get-ChildItem $PWD -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -notmatch '[\\/]+obj[\\/]' } |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 1
+          }
+
+          if (-not $dll) {
             throw "dnSpy.MCP.Server.x.dll for target ${{ matrix.target_framework }} was not found."
           }
 

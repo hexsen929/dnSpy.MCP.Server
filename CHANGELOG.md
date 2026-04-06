@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.18] - 2026-04-06
+
+### Fixed
+- CI packaging now falls back to a workspace-wide search (excluding `obj/`) if the staged `pack-out/net48/mcp` directory is empty, so we can still package the net48 build even if dnSpyEx 6.5.1 ignores the explicit output path override.
+
 ## [1.8.17] - 2026-04-06
 
 ### Fixed
