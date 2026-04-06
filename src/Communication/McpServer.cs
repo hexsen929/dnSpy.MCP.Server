@@ -126,6 +126,17 @@ namespace dnSpy.MCP.Server.Communication {
 			return $"http://{normalizedHost}:{port}/";
 		}
 
+		static string[] BuildPrefixes(string host, int port) {
+			if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)) {
+				return new[] {
+					BuildPrefix("localhost", port),
+					BuildPrefix("127.0.0.1", port),
+				};
+			}
+
+			return new[] { BuildPrefix(host, port) };
+		}
+
 		void StartHttpListenerServer() {
 			Task.Run(async () => {
 				var cancellationToken = cts!.Token;
@@ -135,11 +146,12 @@ namespace dnSpy.MCP.Server.Communication {
 				for (var attempt = 0; attempt < maxAttempts; attempt++) {
 					var currentPort = port + attempt;
 					HttpListener? listener = null;
-					var prefix = BuildPrefix(settings.Host, currentPort);
+					var prefixes = BuildPrefixes(settings.Host, currentPort);
 
 					try {
 						listener = new HttpListener();
-						listener.Prefixes.Add(prefix);
+						foreach (var prefix in prefixes)
+							listener.Prefixes.Add(prefix);
 						listener.Start();
 
 						httpListener = listener;
@@ -149,6 +161,8 @@ namespace dnSpy.MCP.Server.Communication {
 						McpLogger.Info("Starting MCP Server");
 						McpLogger.Info($"Host: {settings.Host}");
 						McpLogger.Info($"Port: {actualPort}");
+						if (prefixes.Length > 1)
+							McpLogger.Info($"Prefixes: {string.Join(", ", prefixes)}");
 						McpLogger.Info("Routes: GET /sse, POST /message, GET|POST|DELETE /mcp, GET /health");
 						McpLogger.Info("═══════════════════════════════════════════════════════");
 
@@ -172,7 +186,7 @@ namespace dnSpy.MCP.Server.Communication {
 						break;
 					}
 					catch (HttpListenerException ex) when (ex.ErrorCode == 5) {
-						McpLogger.Exception(ex, $"Access denied to port {currentPort}. Run: netsh http add urlacl url={prefix} user=Everyone");
+						McpLogger.Exception(ex, $"Access denied to port {currentPort}. Run urlacl for: {string.Join(" ; ", prefixes)}");
 						listener?.Close();
 						break;
 					}
