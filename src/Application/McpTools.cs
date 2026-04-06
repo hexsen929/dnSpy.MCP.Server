@@ -454,6 +454,11 @@ namespace dnSpy.MCP.Server.Application
             var json = JsonSerializer.Serialize(new {
                 ConfigFilePath     = Configuration.McpConfig.ConfigFilePath,
                 ConfigFileExists   = System.IO.File.Exists(Configuration.McpConfig.ConfigFilePath),
+                Host               = cfg.Host,
+                Port               = cfg.Port,
+                ListenerMode       = cfg.ListenerMode,
+                ParsedListenerMode = Configuration.McpConfig.ToConfigValue(cfg.GetListenerMode()),
+                RestartRequiredForListenerChanges = true,
                 De4dotExePath      = cfg.De4dotExePath,
                 De4dotSearchPaths  = cfg.De4dotSearchPaths,
                 ResolvedDe4dotExe  = resolvedDe4dot,
@@ -469,6 +474,11 @@ namespace dnSpy.MCP.Server.Application
             var json = JsonSerializer.Serialize(new {
                 Status             = "reloaded",
                 ConfigFilePath     = Configuration.McpConfig.ConfigFilePath,
+                Host               = cfg.Host,
+                Port               = cfg.Port,
+                ListenerMode       = cfg.ListenerMode,
+                ParsedListenerMode = Configuration.McpConfig.ToConfigValue(cfg.GetListenerMode()),
+                RestartRequiredForListenerChanges = true,
                 De4dotExePath      = cfg.De4dotExePath,
                 De4dotSearchPaths  = cfg.De4dotSearchPaths,
                 ResolvedDe4dotExe  = resolvedDe4dot,

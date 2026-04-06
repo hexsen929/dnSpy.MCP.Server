@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.ComponentModel.Composition;
 using System.IO;
@@ -6,6 +7,7 @@ using System.Net;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using dnSpy.MCP.Server.Communication;
 using dnSpy.MCP.Server.Contracts;
 using dnSpy.MCP.Server.Core;
 using dnSpy.MCP.Server.Helper;
@@ -23,25 +25,34 @@ namespace dnSpy.MCP.Server.Transports {
 			this.sessionManager = sessionManager;
 		}
 
-		public async Task HandleGetAsync(HttpListenerContext context, CancellationToken cancellationToken) {
-			McpLogger.Info($"mcp.stream.get-disabled transport=streamable-http remote={context.Request.RemoteEndPoint}");
-			await McpProtocolHelpers.WriteJsonAsync(context.Response, (int)HttpStatusCode.MethodNotAllowed, new {
+		public Task<McpHttpResponseData> HandleGetAsync(McpHttpRequestData request, CancellationToken cancellationToken) {
+			McpLogger.Info($"mcp.stream.get-disabled transport=streamable-http remote={request.RemoteEndPoint ?? "-"}");
+			return Task.FromResult(McpProtocolHelpers.CreateJsonResponse((int)HttpStatusCode.MethodNotAllowed, new {
 				error = "GET /mcp is disabled. Use POST /mcp for streamable HTTP requests. Use /sse only for the legacy SSE transport.",
-			}, cancellationToken).ConfigureAwait(false);
+			}));
 		}
 
-		public async Task HandlePostAsync(HttpListenerContext context, CancellationToken cancellationToken) {
-			var body = await McpProtocolHelpers.ReadBodyAsync(context.Request, cancellationToken).ConfigureAwait(false);
-			if (!McpProtocolHelpers.TryDeserializeRequest(body, out var request, out var parseError)) {
-				McpLogger.Warning($"mcp.stream.parse-error transport=streamable-http remote={context.Request.RemoteEndPoint} error=\"{parseError}\"");
-				await McpProtocolHelpers.WriteJsonRpcErrorAsync(context.Response, HttpStatusCode.BadRequest, null, -32700, "Parse error", parseError, cancellationToken).ConfigureAwait(false);
-				return;
+		public async Task HandleGetAsync(HttpListenerContext context, CancellationToken cancellationToken) {
+			var request = new McpHttpRequestData {
+				Method = context.Request.HttpMethod,
+				Path = context.Request.Url?.AbsolutePath ?? "/",
+				RemoteEndPoint = context.Request.RemoteEndPoint?.ToString(),
+			};
+			var response = await HandleGetAsync(request, cancellationToken).ConfigureAwait(false);
+			await McpProtocolHelpers.WriteResponseAsync(context.Response, response, cancellationToken).ConfigureAwait(false);
+		}
+
+		public async Task<McpHttpResponseData> HandlePostAsync(McpHttpRequestData request, CancellationToken cancellationToken) {
+			if (!McpProtocolHelpers.TryDeserializeRequest(request.Body, out var rpcRequest, out var parseError)) {
+				McpLogger.Warning($"mcp.stream.parse-error transport=streamable-http remote={request.RemoteEndPoint ?? "-"} error=\"{parseError}\"");
+				return McpProtocolHelpers.CreateJsonRpcErrorResponse(HttpStatusCode.BadRequest, null, -32700, "Parse error", parseError);
 			}
 
-			var sessionIdHeader = context.Request.Headers[McpProtocolHelpers.SessionHeaderName];
-			var isInitialize = McpProtocolHelpers.IsInitializeRequest(request!);
-			var allowAnonymous = AllowsAnonymousRequest(request!);
+			var sessionIdHeader = request.GetHeader(McpProtocolHelpers.SessionHeaderName);
+			var isInitialize = McpProtocolHelpers.IsInitializeRequest(rpcRequest!);
+			var allowAnonymous = AllowsAnonymousRequest(rpcRequest!);
 			McpSessionState? session;
+			var responseHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 			if (isInitialize) {
 				if (string.IsNullOrWhiteSpace(sessionIdHeader)) {
@@ -50,12 +61,11 @@ namespace dnSpy.MCP.Server.Transports {
 				else {
 					session = GetExistingStreamableSession(sessionIdHeader);
 					if (session == null) {
-						McpLogger.Warning($"mcp.stream.initialize-invalid-session transport=streamable-http sessionId={sessionIdHeader} remote={context.Request.RemoteEndPoint}");
-						await McpProtocolHelpers.WriteJsonRpcErrorAsync(context.Response, HttpStatusCode.NotFound, request!.Id, -32001, "Unknown streamable HTTP session for initialize.", new { sessionId = sessionIdHeader }, cancellationToken).ConfigureAwait(false);
-						return;
+						McpLogger.Warning($"mcp.stream.initialize-invalid-session transport=streamable-http sessionId={sessionIdHeader} remote={request.RemoteEndPoint ?? "-"}");
+						return McpProtocolHelpers.CreateJsonRpcErrorResponse(HttpStatusCode.NotFound, rpcRequest!.Id, -32001, "Unknown streamable HTTP session for initialize.", new { sessionId = sessionIdHeader });
 					}
 				}
-				context.Response.Headers[McpProtocolHelpers.SessionHeaderName] = session.SessionId;
+				responseHeaders[McpProtocolHelpers.SessionHeaderName] = session.SessionId;
 			}
 			else {
 				session = GetExistingStreamableSession(sessionIdHeader);
@@ -64,46 +74,83 @@ namespace dnSpy.MCP.Server.Transports {
 			}
 
 			if (session == null) {
-				McpLogger.Warning($"mcp.stream.invalid-session transport=streamable-http sessionId={sessionIdHeader ?? "-"} remote={context.Request.RemoteEndPoint} method={request!.Method}");
-				await McpProtocolHelpers.WriteJsonRpcErrorAsync(context.Response, HttpStatusCode.NotFound, request!.Id, -32001, "Unknown or expired streamable HTTP session.", new { sessionId = sessionIdHeader }, cancellationToken).ConfigureAwait(false);
-				return;
+				McpLogger.Warning($"mcp.stream.invalid-session transport=streamable-http sessionId={sessionIdHeader ?? "-"} remote={request.RemoteEndPoint ?? "-"} method={rpcRequest!.Method}");
+				return McpProtocolHelpers.CreateJsonRpcErrorResponse(HttpStatusCode.NotFound, rpcRequest!.Id, -32001, "Unknown or expired streamable HTTP session.", new { sessionId = sessionIdHeader });
 			}
 
 			sessionManager.TouchSession(session.SessionId);
-			var requestContext = new McpRequestContext(McpTransportKind.StreamableHttp, session.SessionId, context.Request.RemoteEndPoint?.ToString(), request!, cancellationToken);
+			var requestContext = new McpRequestContext(McpTransportKind.StreamableHttp, session.SessionId, request.RemoteEndPoint, rpcRequest!, cancellationToken);
 			McpResponse? response;
 
 			try {
-				response = await core.ProcessAsync(request!, requestContext).ConfigureAwait(false);
+				response = await core.ProcessAsync(rpcRequest!, requestContext).ConfigureAwait(false);
 			}
 			catch (McpProtocolException ex) {
-				await McpProtocolHelpers.WriteJsonRpcErrorAsync(context.Response, ex.HttpStatusCode, request!.Id, ex.ErrorCode, ex.Message, ex.ErrorData, cancellationToken).ConfigureAwait(false);
-				return;
+				var errorResponse = McpProtocolHelpers.CreateJsonRpcErrorResponse(ex.HttpStatusCode, rpcRequest!.Id, ex.ErrorCode, ex.Message, ex.ErrorData);
+				foreach (var kvp in responseHeaders)
+					errorResponse.Headers[kvp.Key] = kvp.Value;
+				return errorResponse;
 			}
 
+			McpHttpResponseData finalResponse;
 			if (response == null) {
-				context.Response.StatusCode = (int)HttpStatusCode.Accepted;
-				context.Response.ContentType = McpProtocolHelpers.JsonContentType;
-				context.Response.ContentLength64 = 0;
-				context.Response.Close();
-				return;
+				finalResponse = new McpHttpResponseData {
+					StatusCode = (int)HttpStatusCode.Accepted,
+					ContentType = McpProtocolHelpers.JsonContentType,
+					ContentEncoding = McpProtocolHelpers.Utf8NoBom,
+					BodyBytes = Array.Empty<byte>(),
+				};
+			}
+			else {
+				finalResponse = McpProtocolHelpers.CreateJsonResponse((int)HttpStatusCode.OK, response);
 			}
 
-			await McpProtocolHelpers.WriteJsonAsync(context.Response, (int)HttpStatusCode.OK, response, cancellationToken).ConfigureAwait(false);
+			foreach (var kvp in responseHeaders)
+				finalResponse.Headers[kvp.Key] = kvp.Value;
+			return finalResponse;
+		}
+
+		public async Task HandlePostAsync(HttpListenerContext context, CancellationToken cancellationToken) {
+			var request = new McpHttpRequestData {
+				Method = context.Request.HttpMethod,
+				Path = context.Request.Url?.AbsolutePath ?? "/",
+				Body = await McpProtocolHelpers.ReadBodyAsync(context.Request, cancellationToken).ConfigureAwait(false),
+				RemoteEndPoint = context.Request.RemoteEndPoint?.ToString(),
+			};
+			foreach (var key in context.Request.Headers.AllKeys) {
+				if (key == null)
+					continue;
+				request.Headers[key] = context.Request.Headers[key] ?? string.Empty;
+			}
+			var response = await HandlePostAsync(request, cancellationToken).ConfigureAwait(false);
+			await McpProtocolHelpers.WriteResponseAsync(context.Response, response, cancellationToken).ConfigureAwait(false);
+		}
+
+		public Task<McpHttpResponseData> HandleDeleteAsync(McpHttpRequestData request, CancellationToken cancellationToken) {
+			var sessionId = request.GetHeader(McpProtocolHelpers.SessionHeaderName);
+			if (!sessionManager.TryGetSession(sessionId, out var session) || session?.Transport != McpTransportKind.StreamableHttp || string.IsNullOrWhiteSpace(sessionId))
+				return Task.FromResult(McpProtocolHelpers.CreateJsonRpcErrorResponse(HttpStatusCode.NotFound, null, -32001, "Unknown or expired streamable HTTP session.", new { sessionId }));
+
+			RemoveConnection(sessionId, removeSession: true);
+			return Task.FromResult(McpProtocolHelpers.CreateJsonResponse((int)HttpStatusCode.OK, new {
+				sessionId,
+				closed = true,
+			}));
 		}
 
 		public async Task HandleDeleteAsync(HttpListenerContext context, CancellationToken cancellationToken) {
-			var sessionId = context.Request.Headers[McpProtocolHelpers.SessionHeaderName];
-			if (!sessionManager.TryGetSession(sessionId, out var session) || session?.Transport != McpTransportKind.StreamableHttp || string.IsNullOrWhiteSpace(sessionId)) {
-				await McpProtocolHelpers.WriteJsonRpcErrorAsync(context.Response, HttpStatusCode.NotFound, null, -32001, "Unknown or expired streamable HTTP session.", new { sessionId }, cancellationToken).ConfigureAwait(false);
-				return;
+			var request = new McpHttpRequestData {
+				Method = context.Request.HttpMethod,
+				Path = context.Request.Url?.AbsolutePath ?? "/",
+				RemoteEndPoint = context.Request.RemoteEndPoint?.ToString(),
+			};
+			foreach (var key in context.Request.Headers.AllKeys) {
+				if (key == null)
+					continue;
+				request.Headers[key] = context.Request.Headers[key] ?? string.Empty;
 			}
-
-			RemoveConnection(sessionId, removeSession: true);
-			await McpProtocolHelpers.WriteJsonAsync(context.Response, (int)HttpStatusCode.OK, new {
-				sessionId,
-				closed = true,
-			}, cancellationToken).ConfigureAwait(false);
+			var response = await HandleDeleteAsync(request, cancellationToken).ConfigureAwait(false);
+			await McpProtocolHelpers.WriteResponseAsync(context.Response, response, cancellationToken).ConfigureAwait(false);
 		}
 
 		public async Task BroadcastStatusAsync(string status, CancellationToken cancellationToken) {

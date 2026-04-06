@@ -1,6 +1,7 @@
 {
   "host": "127.0.0.1",
   "port": 3100,
+  "listenerMode": "httpListener",
   "de4dotExePath": "",
   "de4dotSearchPaths": []
 }

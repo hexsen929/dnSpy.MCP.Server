@@ -19,6 +19,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Text="Host:" Grid.Row="0" Grid.Column="0" Margin="0,5,10,5" VerticalAlignment="Center"/>
@@ -26,13 +27,23 @@
 
                 <TextBlock Text="Port:" Grid.Row="1" Grid.Column="0" Margin="0,5,10,5" VerticalAlignment="Center"/>
                 <TextBox Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}" Grid.Row="1" Grid.Column="1" Margin="0,5,0,5" MinWidth="200"/>
+
+                <TextBlock Text="Listener:" Grid.Row="2" Grid.Column="0" Margin="0,5,10,5" VerticalAlignment="Center"/>
+                <ComboBox ItemsSource="{Binding ListenerModeOptions}"
+                          SelectedItem="{Binding ListenerMode, UpdateSourceTrigger=PropertyChanged}"
+                          Grid.Row="2"
+                          Grid.Column="1"
+                          Margin="0,5,0,5"
+                          MinWidth="200"/>
             </Grid>
             <TextBlock Margin="0,10,0,10"
                        FontStyle="Italic"
                        Foreground="Gray">
                 <Run Text="Note: Server starts/stops immediately when enabled/disabled."/>
                 <LineBreak/>
-                <Run Text="Host/Port changes require restarting dnSpy."/>
+                <Run Text="Host/Port/Listener changes restart the MCP server when you click OK."/>
+                <LineBreak/>
+                <Run Text="tcpListener mode serves /health and /mcp; legacy /sse + /message remain HttpListener-only."/>
             </TextBlock>
         </StackPanel>
 

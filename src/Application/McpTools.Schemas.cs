@@ -2128,7 +2128,7 @@ namespace dnSpy.MCP.Server.Application
             },
             new ToolInfo {
                 Name = "reload_mcp_config",
-                Description = "Reload mcp-config.json from disk without restarting dnSpy. Call this after editing the config file to apply changes immediately.",
+                Description = "Reload mcp-config.json from disk. de4dot-related settings apply immediately; host/port/listenerMode changes take effect the next time the MCP server restarts.",
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object", ["properties"] = new Dictionary<string, object>(), ["required"] = new List<string>()
                 }

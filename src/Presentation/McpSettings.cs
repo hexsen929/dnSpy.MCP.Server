@@ -86,6 +86,22 @@ namespace dnSpy.MCP.Server.Presentation {
 		int port = 3100;
 
 		/// <summary>
+		/// Gets or sets the listener backend mode.
+		/// Valid values: httpListener, tcpListener, auto.
+		/// </summary>
+		public string ListenerMode {
+			get => listenerMode;
+			set {
+				var normalized = string.IsNullOrWhiteSpace(value) ? "httpListener" : value.Trim();
+				if (listenerMode != normalized) {
+					listenerMode = normalized;
+					OnPropertyChanged(nameof(ListenerMode));
+				}
+			}
+		}
+		string listenerMode = "httpListener";
+
+		/// <summary>
 		/// Gets the collection of log messages (limited to last 100 messages).
 		/// </summary>
 		public ObservableCollection<string> LogMessages { get; } = new ObservableCollection<string>();
@@ -204,7 +220,12 @@ namespace dnSpy.MCP.Server.Presentation {
 			other.EnableServer = EnableServer;
 			other.Host = Host;
 			other.Port = Port;
+			other.ListenerMode = ListenerMode;
 			return other;
+		}
+
+		internal virtual void ApplyFrom(McpSettings source) {
+			source.CopyTo(this);
 		}
 	}
 
@@ -217,6 +238,7 @@ namespace dnSpy.MCP.Server.Presentation {
 
 		readonly ISettingsService settingsService;
 		McpServer? mcpServer;
+		bool suppressRuntimeActions;
 
 		[ImportingConstructor]
 		McpSettingsImpl(ISettingsService settingsService) {
@@ -228,6 +250,7 @@ namespace dnSpy.MCP.Server.Presentation {
 			var cfg = Configuration.McpConfig.Instance;
 			Host = cfg.Host;
 			Port = cfg.Port;
+			ListenerMode = cfg.ListenerMode;
 
 			// EnableServer is the only property persisted in dnSpy's own settings store
 			// (it controls the on/off toggle in the UI and survives dnSpy restarts).
@@ -248,49 +271,102 @@ namespace dnSpy.MCP.Server.Presentation {
 			mcpServer = server;
 		}
 
+		internal override void ApplyFrom(McpSettings source) {
+			var oldEnableServer = EnableServer;
+			var oldHost = Host;
+			var oldPort = Port;
+			var oldListenerMode = ListenerMode;
+
+			suppressRuntimeActions = true;
+			try {
+				source.CopyTo(this);
+			}
+			finally {
+				suppressRuntimeActions = false;
+			}
+
+			PersistEnableSetting();
+			PersistConfig();
+
+			var endpointChanged =
+				!StringComparer.OrdinalIgnoreCase.Equals(oldHost, Host) ||
+				oldPort != Port ||
+				!StringComparer.OrdinalIgnoreCase.Equals(oldListenerMode, ListenerMode);
+
+			if (mcpServer == null)
+				return;
+
+			if (!oldEnableServer && EnableServer) {
+				Log("Starting MCP server");
+				mcpServer.Start();
+				LogServerStatusAfterDelay(300, expectedRunning: true);
+			}
+			else if (oldEnableServer && !EnableServer) {
+				Log("Stopping MCP server");
+				mcpServer.Stop();
+				LogServerStatusAfterDelay(200, expectedRunning: false);
+			}
+			else if (EnableServer && endpointChanged) {
+				Log($"Restarting MCP server to apply Host/Port/ListenerMode changes ({Host}:{Port}, {ListenerMode})");
+				mcpServer.Restart();
+				LogServerStatusAfterDelay(400, expectedRunning: true);
+			}
+		}
+
 		void McpSettingsImpl_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
-			// Only EnableServer is persisted — Host and Port are owned by mcp-config.json
-			var sect = settingsService.RecreateSection(SETTINGS_GUID);
-			sect.Attribute(nameof(EnableServer), EnableServer);
+			if (suppressRuntimeActions)
+				return;
 
 			// Handle server enable/disable dynamically (no restart required)
 			if (e.PropertyName == nameof(EnableServer) && mcpServer != null) {
+				PersistEnableSetting();
 				if (EnableServer) {
 					Log("Starting MCP server");
 					mcpServer.Start();
-
-					// Verify asynchronously that the server started and report to output
-					System.Threading.Tasks.Task.Run(async () => {
-						await System.Threading.Tasks.Task.Delay(300);
-						try {
-							if (mcpServer.IsRunning)
-								Log("MCP server is running");
-							else
-								Log("MCP server failed to start");
-						}
-						catch (Exception ex) {
-							Log($"Error checking server status: {ex.Message}");
-						}
-					});
+					LogServerStatusAfterDelay(300, expectedRunning: true);
 				} else {
 					Log("Stopping MCP server");
 					mcpServer.Stop();
-
-					// Verify asynchronously that the server stopped and report to output
-					System.Threading.Tasks.Task.Run(async () => {
-						await System.Threading.Tasks.Task.Delay(200);
-						try {
-							if (mcpServer.IsRunning)
-								Log("MCP server is still running");
-							else
-								Log("MCP server stopped");
-						}
-						catch (Exception ex) {
-							Log($"Error checking server status: {ex.Message}");
-						}
-					});
+					LogServerStatusAfterDelay(200, expectedRunning: false);
 				}
 			}
+		}
+
+		void PersistEnableSetting() {
+			var sect = settingsService.RecreateSection(SETTINGS_GUID);
+			sect.Attribute(nameof(EnableServer), EnableServer);
+		}
+
+		void PersistConfig() {
+			var cfg = Configuration.McpConfig.Reload();
+			cfg.Host = Host;
+			cfg.Port = Port;
+			cfg.ListenerMode = ListenerMode;
+			cfg.Save();
+		}
+
+		void LogServerStatusAfterDelay(int delayMs, bool expectedRunning) {
+			System.Threading.Tasks.Task.Run(async () => {
+				await System.Threading.Tasks.Task.Delay(delayMs);
+				try {
+					var isRunning = mcpServer != null && mcpServer.IsRunning;
+					if (expectedRunning) {
+						if (isRunning)
+							Log("MCP server is running");
+						else
+							Log("MCP server failed to start");
+					}
+					else {
+						if (isRunning)
+							Log("MCP server is still running");
+						else
+							Log("MCP server stopped");
+					}
+				}
+				catch (Exception ex) {
+					Log($"Error checking server status: {ex.Message}");
+				}
+			});
 		}
 	}
 }

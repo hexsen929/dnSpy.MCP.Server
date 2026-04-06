@@ -2,6 +2,17 @@
 
 ---
 
+## v1.8.9 — 2026-04-06
+
+### New: Selectable listener backend
+
+- added `listenerMode` config and settings UI support: `httpListener`, `tcpListener`, `auto`
+- `tcpListener` serves `GET /health` plus `POST|DELETE /mcp`
+- `httpListener` remains available when you need legacy `/sse` + `/message`
+- intended for environments where Wine/CrossOver `HttpListener` breaks on some MCP client HTTP requests
+
+---
+
 ## v1.8.8 — 2026-04-06
 
 ### Fixed: POST-only `/mcp` for streamable HTTP
@@ -86,7 +97,7 @@ An optional `stdio` bridge is now included as `tools/dnSpy.MCP.StdioProxy`.
 
 ### Current tool count on main
 
-- **143+ tools**
+- **137 tools + 6 resources**
 
 ---
 

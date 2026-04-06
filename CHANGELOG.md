@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.9] - 2026-04-06
+
+### Added
+- Optional `listenerMode` config with `httpListener`, `tcpListener`, and `auto`.
+- Settings UI can now switch listener backend and restart the MCP server to apply host/port/listener changes.
+
+### Changed
+- Added a `tcpListener` backend for `/health` and streamable HTTP `/mcp`, intended to bypass CrossOver/Wine `HttpListener` header/body parsing issues seen with Codex.
+- `httpListener` remains available for full legacy SSE compatibility on `/sse` + `/message`.
+
 ## [1.8.8] - 2026-04-06
 
 ### Fixed

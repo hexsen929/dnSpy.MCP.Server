@@ -26,6 +26,13 @@ using System.Text.Json.Serialization;
 
 namespace dnSpy.MCP.Server.Configuration
 {
+    public enum McpListenerMode
+    {
+        HttpListener,
+        TcpListener,
+        Auto,
+    }
+
     /// <summary>
     /// Loads and holds settings from mcp-config.json, which lives alongside the
     /// MCP server DLL in the dnSpy output directory.
@@ -55,7 +62,6 @@ namespace dnSpy.MCP.Server.Configuration
         /// <summary>
         /// Hostname or IP address the MCP server listens on.
         /// Use "127.0.0.1" (default) for local-only access.
-        /// "localhost" is also supported and will try to register both loopback forms.
         /// Use "0.0.0.0" or "+" to listen on all interfaces — required for remote debugging
         /// from a sandbox or virtual machine. Note: non-localhost bindings require a prior
         /// netsh url reservation: netsh http add urlacl url=http://+:PORT/ user=Everyone
@@ -66,6 +72,13 @@ namespace dnSpy.MCP.Server.Configuration
         /// <summary>TCP port the MCP server listens on. Default 3100.</summary>
         [JsonPropertyName("port")]
         public int Port { get; set; } = 3100;
+
+        /// <summary>
+        /// Listener backend used for incoming HTTP requests.
+        /// Valid values: "httpListener", "tcpListener", "auto".
+        /// </summary>
+        [JsonPropertyName("listenerMode")]
+        public string ListenerMode { get; set; } = "httpListener";
 
         /// <summary>If true, all requests must include X-API-Key or Authorization: Bearer <ApiKey>.</summary>
         [JsonPropertyName("requireApiKey")]
@@ -163,6 +176,51 @@ namespace dnSpy.MCP.Server.Configuration
         {
             var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(path, json);
+        }
+
+        public void Save()
+        {
+            Save(ConfigFilePath);
+        }
+
+        public McpListenerMode GetListenerMode()
+        {
+            return ParseListenerMode(ListenerMode);
+        }
+
+        public static McpListenerMode ParseListenerMode(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return McpListenerMode.HttpListener;
+
+            switch (value.Trim().ToLowerInvariant())
+            {
+            case "httplistener":
+            case "http-listener":
+            case "http":
+                return McpListenerMode.HttpListener;
+            case "tcplistener":
+            case "tcp-listener":
+            case "tcp":
+                return McpListenerMode.TcpListener;
+            case "auto":
+                return McpListenerMode.Auto;
+            default:
+                return McpListenerMode.HttpListener;
+            }
+        }
+
+        public static string ToConfigValue(McpListenerMode mode)
+        {
+            switch (mode)
+            {
+            case McpListenerMode.TcpListener:
+                return "tcpListener";
+            case McpListenerMode.Auto:
+                return "auto";
+            default:
+                return "httpListener";
+            }
         }
 
         // ── de4dot resolution ─────────────────────────────────────────────────

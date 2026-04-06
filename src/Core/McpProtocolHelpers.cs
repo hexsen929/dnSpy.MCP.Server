@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using dnSpy.MCP.Server.Communication;
 using dnSpy.MCP.Server.Contracts;
 
 namespace dnSpy.MCP.Server.Core {
@@ -27,6 +28,15 @@ namespace dnSpy.MCP.Server.Core {
 				cancellationToken.ThrowIfCancellationRequested();
 				return await reader.ReadToEndAsync().ConfigureAwait(false);
 			}
+		}
+
+		public static McpHttpResponseData CreateJsonResponse(int statusCode, object payload) {
+			return new McpHttpResponseData {
+				StatusCode = statusCode,
+				ContentType = JsonContentType,
+				ContentEncoding = Utf8NoBom,
+				BodyBytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions),
+			};
 		}
 
 		public static bool TryDeserializeRequest(string body, out McpRequest? request, out string? errorMessage) {
@@ -102,18 +112,29 @@ namespace dnSpy.MCP.Server.Core {
 		};
 
 		public static async Task WriteJsonAsync(HttpListenerResponse response, int statusCode, object payload, CancellationToken cancellationToken) {
-			var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
-			response.StatusCode = statusCode;
-			response.ContentType = JsonContentType;
-			response.ContentEncoding = Utf8NoBom;
-			response.ContentLength64 = bytes.LongLength;
-			await response.OutputStream.WriteAsync(bytes, 0, bytes.Length, cancellationToken).ConfigureAwait(false);
-			response.Close();
+			await WriteResponseAsync(response, CreateJsonResponse(statusCode, payload), cancellationToken).ConfigureAwait(false);
 		}
 
 		public static Task WriteJsonRpcErrorAsync(HttpListenerResponse response, HttpStatusCode statusCode, object? id, int code, string message, object? data, CancellationToken cancellationToken) {
 			var payload = CreateError(id, code, message, data);
 			return WriteJsonAsync(response, (int)statusCode, payload, cancellationToken);
+		}
+
+		public static McpHttpResponseData CreateJsonRpcErrorResponse(HttpStatusCode statusCode, object? id, int code, string message, object? data) {
+			var payload = CreateError(id, code, message, data);
+			return CreateJsonResponse((int)statusCode, payload);
+		}
+
+		public static async Task WriteResponseAsync(HttpListenerResponse response, McpHttpResponseData payload, CancellationToken cancellationToken) {
+			response.StatusCode = payload.StatusCode;
+			response.ContentType = payload.ContentType;
+			response.ContentEncoding = payload.ContentEncoding;
+			foreach (var kvp in payload.Headers)
+				response.Headers[kvp.Key] = kvp.Value;
+			response.ContentLength64 = payload.BodyBytes.LongLength;
+			if (payload.BodyBytes.Length > 0)
+				await response.OutputStream.WriteAsync(payload.BodyBytes, 0, payload.BodyBytes.Length, cancellationToken).ConfigureAwait(false);
+			response.Close();
 		}
 
 		public static void PrepareSseResponse(HttpListenerResponse response) {

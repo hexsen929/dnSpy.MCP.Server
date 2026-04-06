@@ -106,7 +106,7 @@ namespace dnSpy.MCP.Server.Presentation {
 		/// Applies the settings when user clicks OK.
 		/// </summary>
 		public override void OnApply() =>
-			newSettings.CopyTo(globalSettings);
+			globalSettings.ApplyFrom(newSettings);
 
 		/// <summary>
 		/// Called when the settings dialog is closed.
@@ -164,6 +164,16 @@ namespace dnSpy.MCP.Server.Presentation {
 			get => editableSettings.Port;
 			set => editableSettings.Port = value;
 		}
+
+		/// <summary>
+		/// Gets or sets the listener backend mode (editable).
+		/// </summary>
+		public string ListenerMode {
+			get => editableSettings.ListenerMode;
+			set => editableSettings.ListenerMode = value;
+		}
+
+		public string[] ListenerModeOptions => new[] { "httpListener", "tcpListener", "auto" };
 
 		/// <summary>
 		/// Gets the live log messages from global settings.

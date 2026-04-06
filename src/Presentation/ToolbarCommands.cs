@@ -61,8 +61,7 @@ namespace dnSpy.MCP.Server.Presentation {
 		public override void Execute(IToolBarItemContext context) {
 			try {
 				mcpSettings.EnableServer = true;
-				mcpServer.Value.Start();
-				McpLogger.Info("Toolbar start requested - MCP server start initiated");
+				McpLogger.Info("Toolbar start requested - EnableServer set to true");
 			}
 			catch (Exception ex) {
 				McpLogger.Exception(ex, "Toolbar start failed");
@@ -101,8 +100,7 @@ namespace dnSpy.MCP.Server.Presentation {
 		public override void Execute(IToolBarItemContext context) {
 			try {
 				mcpSettings.EnableServer = false;
-				mcpServer.Value.Stop();
-				McpLogger.Info("Toolbar stop requested - MCP server stop initiated");
+				McpLogger.Info("Toolbar stop requested - EnableServer set to false");
 			}
 			catch (Exception ex) {
 				McpLogger.Exception(ex, "Toolbar stop failed");
@@ -142,8 +140,7 @@ namespace dnSpy.MCP.Server.Presentation {
 		public override void Execute(IMenuItemContext context) {
 			try {
 				mcpSettings.EnableServer = true;
-				mcpServer.Value.Start();
-				McpLogger.Info("Debug menu start requested - MCP server start initiated");
+				McpLogger.Info("Debug menu start requested - EnableServer set to true");
 			}
 			catch (Exception ex) {
 				McpLogger.Exception(ex, "Debug menu start failed");
@@ -180,8 +177,7 @@ namespace dnSpy.MCP.Server.Presentation {
 		public override void Execute(IMenuItemContext context) {
 			try {
 				mcpSettings.EnableServer = false;
-				mcpServer.Value.Stop();
-				McpLogger.Info("Debug menu stop requested - MCP server stop initiated");
+				McpLogger.Info("Debug menu stop requested - EnableServer set to false");
 			}
 			catch (Exception ex) {
 				McpLogger.Exception(ex, "Debug menu stop failed");
