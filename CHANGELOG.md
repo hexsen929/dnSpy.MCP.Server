@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.17] - 2026-04-06
+
+### Fixed
+- GitHub Actions now disables automatic framework/RID suffixing on the explicit `pack-out` staging directories and recursively searches those staging roots during packaging, covering the last likely cause of the net48 package not being discovered after a successful build.
+
 ## [1.8.16] - 2026-04-06
 
 ### Fixed

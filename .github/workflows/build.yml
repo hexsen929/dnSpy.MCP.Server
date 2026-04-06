@@ -76,17 +76,22 @@ jobs:
             -c Release `
             -f ${{ matrix.target_framework }} `
             -p:OutputPath="$mcpOutDir/" `
+            -p:AppendTargetFrameworkToOutputPath=false `
+            -p:AppendRuntimeIdentifierToOutputPath=false `
             --no-restore
           dotnet build extension-src/tools/dnSpy.MCP.StdioProxy/dnSpy.MCP.StdioProxy.csproj `
             -c Release `
             -p:OutputPath="$proxyOutDir/" `
+            -p:AppendTargetFrameworkToOutputPath=false `
+            -p:AppendRuntimeIdentifierToOutputPath=false `
             --no-restore
 
       - name: Package build output
         shell: pwsh
         run: |
           $outDir = Join-Path $PWD "pack-out/${{ matrix.target_framework }}/mcp"
-          $dll = Get-ChildItem $outDir -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
+          $dll = Get-ChildItem $outDir -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
 
           if (-not $dll) {
@@ -125,7 +130,7 @@ jobs:
               'Run-dnSpy-MCP-Stdio-Proxy.cmd'
             )
             foreach ($pattern in $proxyPatterns) {
-              Get-ChildItem -Path $proxyOutDir -Filter $pattern -File -ErrorAction SilentlyContinue |
+              Get-ChildItem -Path $proxyOutDir -Recurse -Filter $pattern -File -ErrorAction SilentlyContinue |
                 Copy-Item -Destination $proxyArtifactDir -Force
             }
             Copy-Item 'extension-src/tools/dnSpy.MCP.StdioProxy/Run-dnSpy-MCP-Stdio-Proxy.cmd' -Destination $proxyArtifactDir -Force

@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.17 — 2026-04-06
+
+### Fixed: disable suffixing in pack-out staging
+
+- CI now sets `AppendTargetFrameworkToOutputPath=false` and `AppendRuntimeIdentifierToOutputPath=false` for the explicit `pack-out` staging directories
+- packaging also searches those staging roots recursively
+- this is targeted at the remaining net48 case where the build succeeds but the staged DLL is still not found at package time
+
+---
+
 ## v1.8.16 — 2026-04-06
 
 ### Fixed: explicit pack-out staging for CI packaging
