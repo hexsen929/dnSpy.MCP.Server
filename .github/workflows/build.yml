@@ -86,6 +86,14 @@ jobs:
             -p:AppendRuntimeIdentifierToOutputPath=false `
             --no-restore
 
+      - name: Upload raw staged output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnSpy.MCP.Server-raw-${{ matrix.target_framework }}
+          path: pack-out/${{ matrix.target_framework }}
+          if-no-files-found: warn
+
       - name: Package build output
         shell: pwsh
         run: |
