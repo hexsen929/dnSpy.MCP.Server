@@ -866,7 +866,8 @@ namespace dnSpy.MCP.Server.Application
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
-                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" }
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" }
                     },
                     ["required"] = new List<string> { "assembly_name" }
                 }
@@ -878,6 +879,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"]   = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly to edit" },
+                        ["file_path"]       = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["new_name"]        = new Dictionary<string, object> { ["type"] = "string", ["description"] = "New assembly name (optional)" },
                         ["version"]         = new Dictionary<string, object> { ["type"] = "string", ["description"] = "New version as major.minor.build.revision (optional, e.g. '2.0.0.0')" },
                         ["culture"]         = new Dictionary<string, object> { ["type"] = "string", ["description"] = "New culture string, e.g. '' (neutral), 'en-US' (optional)" },
@@ -892,7 +894,8 @@ namespace dnSpy.MCP.Server.Application
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
-                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly to inspect" }
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly to inspect" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" }
                     },
                     ["required"] = new List<string> { "assembly_name" }
                 }
@@ -904,6 +907,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"]      = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly to modify" },
+                        ["file_path"]          = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["attribute_type_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Simple or fully-qualified name of the attribute to remove, e.g. 'SuppressIldasmAttribute' or 'System.Runtime.CompilerServices.SuppressIldasmAttribute'" },
                         ["index"]              = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional 0-based index among matching attributes to remove a specific one. Omit to remove ALL matching attributes." }
                     },
@@ -917,6 +921,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["flag_name"]     = new Dictionary<string, object> {
                             ["type"] = "string",
                             ["description"] = "Flag to change: PublicKey | Retargetable | DisableJITOptimizer | EnableJITTracking | WindowsRuntime | ProcessorArchitecture"
@@ -935,7 +940,8 @@ namespace dnSpy.MCP.Server.Application
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
-                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" }
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" }
                     },
                     ["required"] = new List<string> { "assembly_name" }
                 }
@@ -947,6 +953,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the target assembly to add the reference to" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["dll_path"]      = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Absolute path to the DLL to reference" },
                         ["type_name"]     = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Specific public type to use as the TypeForwarder anchor (optional; defaults to first public type)" }
                     },
@@ -960,6 +967,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"]  = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Assembly to modify" },
+                        ["file_path"]      = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["reference_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Short name of the assembly reference to remove (e.g. System.Drawing)" }
                     },
                     ["required"] = new List<string> { "assembly_name", "reference_name" }
@@ -972,6 +980,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"]    = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the target assembly" },
+                        ["file_path"]        = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["dll_path"]         = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Absolute path to the source DLL" },
                         ["source_type"]      = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Full name (or simple name) of the type to inject" },
                         ["target_namespace"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Namespace for the injected type in the target assembly (optional; defaults to source namespace)" },
@@ -987,6 +996,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"]  = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly to inspect" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional: full name of a specific type to inspect. Omit to scan all types in the assembly." }
                     },
                     ["required"] = new List<string> { "assembly_name" }
@@ -999,6 +1009,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"]   = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly containing the method" },
+                        ["file_path"]       = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["type_full_name"]  = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Full name of the type containing the method (including namespace)" },
                         ["method_name"]     = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Simple name of the method to patch" },
                         ["method_token"]    = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional metadata token (hex like 0x06001234 or decimal) to disambiguate overloaded methods" }
