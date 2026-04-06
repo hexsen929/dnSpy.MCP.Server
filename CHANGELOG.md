@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.11] - 2026-04-06
+
+### Fixed
+- GitHub Actions now pins the dnSpyEx source checkout to `v6.5.1` instead of tracking `master`, so the release build matches the official `dnSpy-netframework` host (`dnlib 4.4.0`) instead of accidentally compiling against newer `master` snapshots that moved to `dnlib 4.5.0`.
+- This removes the remaining `dnlib, Version=4.5.0.0` binding mismatch seen by `get_class_sourcecode` / `update_method_sourcecode` and the AgentSmithers alias variants when running inside the stock `dnSpy-netframework` package.
+
 ## [1.8.10] - 2026-04-06
 
 ### Fixed

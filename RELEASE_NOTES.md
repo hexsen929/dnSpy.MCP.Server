@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.11 — 2026-04-06
+
+### Fixed: build against the official dnSpyEx 6.5.1 host
+
+- GitHub Actions now checks out `dnSpyEx/dnSpy@v6.5.1` instead of the moving `master` branch
+- this keeps the build aligned with the official `dnSpy-netframework` package and its `dnlib 4.4.0`
+- fixes the remaining `dnlib, Version=4.5.0.0` binding mismatch that still affected AgentSmithers-style direct-edit tools in `v1.8.10`
+
+---
+
 ## v1.8.10 — 2026-04-06
 
 ### Fixed: AgentSmithers alias routing + dnlib compatibility
