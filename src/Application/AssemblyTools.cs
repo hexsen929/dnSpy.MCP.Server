@@ -215,7 +215,10 @@ namespace dnSpy.MCP.Server.Application
                 throw new ArgumentException("assembly_name is required");
 
             var assemblyName = assemblyNameObj.ToString() ?? string.Empty;
-            var assembly = FindAssemblyByName(assemblyName);
+            var filePath = arguments.TryGetValue("file_path", out var fpObj) ? fpObj?.ToString() : null;
+            var assembly = !string.IsNullOrWhiteSpace(filePath)
+                ? FindAssemblyByFilePath(filePath!)
+                : FindAssemblyByName(assemblyName);
             if (assembly == null)
                 throw new ArgumentException($"Assembly not found: {assemblyName}");
 
@@ -227,15 +230,11 @@ namespace dnSpy.MCP.Server.Application
                 {
                     try
                     {
-                        foreach (var ca in method.CustomAttributes)
+                        if (method.IsPinvokeImpl && method.ImplMap != null)
                         {
-                            var at = ca.AttributeType.FullName;
-                            if (!string.IsNullOrEmpty(at) && at.EndsWith("DllImportAttribute"))
+                            var dllName = method.ImplMap.Module?.Name ?? string.Empty;
+                            if (!string.IsNullOrEmpty(dllName))
                             {
-                                var dllName = ca.ConstructorArguments.Count > 0 ? ca.ConstructorArguments[0].Value?.ToString() ?? string.Empty : string.Empty;
-                                if (string.IsNullOrEmpty(dllName))
-                                    continue;
-
                                 if (!modules.TryGetValue(dllName, out var set))
                                 {
                                     set = new HashSet<object>();
@@ -244,6 +243,25 @@ namespace dnSpy.MCP.Server.Application
 
                                 set.Add(new { Type = type.FullName, Method = method.Name.String });
                             }
+                        }
+
+                        foreach (var ca in method.CustomAttributes)
+                        {
+                            var at = ca.AttributeType.FullName;
+                            if (string.IsNullOrEmpty(at) || !at.EndsWith("DllImportAttribute", StringComparison.Ordinal))
+                                continue;
+
+                            var dllName = ca.ConstructorArguments.Count > 0 ? ca.ConstructorArguments[0].Value?.ToString() ?? string.Empty : string.Empty;
+                            if (string.IsNullOrEmpty(dllName))
+                                continue;
+
+                            if (!modules.TryGetValue(dllName, out var set))
+                            {
+                                set = new HashSet<object>();
+                                modules[dllName] = set;
+                            }
+
+                            set.Add(new { Type = type.FullName, Method = method.Name.String });
                         }
                     }
                     catch { /* tolerate metadata issues */ }
@@ -689,52 +707,77 @@ namespace dnSpy.MCP.Server.Application
                 throw new ArgumentException("assembly_name is required");
 
             var assemblyName = nameObj.ToString() ?? string.Empty;
+            var filePath = arguments.TryGetValue("file_path", out var fpObj) ? fpObj?.ToString() : null;
 
-            // Optional file_path for disambiguation when multiple assemblies share the same name
-            AssemblyDef? assembly = null;
-            if (arguments.TryGetValue("file_path", out var fpObj) && fpObj?.ToString() is string fp && !string.IsNullOrWhiteSpace(fp))
+            var document = LoadedDocumentsHelper.FindDocument(documentService, assemblyName, filePath);
+            if (document == null)
             {
-                assembly = FindAssemblyByFilePath(fp);
-                if (assembly == null)
-                    throw new ArgumentException($"No assembly loaded from path: {fp}. Use list_assemblies to see FilePath values.");
-            }
-            else
-            {
-                assembly = FindAssemblyByName(assemblyName);
-                if (assembly == null)
-                    throw new ArgumentException($"Assembly not found: {assemblyName}. Use list_assemblies to see loaded assemblies.");
+                if (!string.IsNullOrWhiteSpace(filePath))
+                    throw new ArgumentException($"No assembly loaded from path: {filePath}. Use list_assemblies to see FilePath values.");
+                throw new ArgumentException($"Assembly not found: {assemblyName}. Use list_assemblies to see loaded assemblies.");
             }
 
-            // All tree-view operations must be on the UI thread
-            var info = System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            var assembly = document.AssemblyDef
+                ?? throw new ArgumentException($"Loaded document '{document.Filename ?? assemblyName}' is not a managed assembly.");
+
+            bool openedTab = false;
+            string? openError = null;
+            try
             {
-                // Find the tree node for this assembly
-                var assemblyNode = documentTreeView.FindNode(assembly);
-                if (assemblyNode == null)
-                    return new { Selected = false, OpenedTab = false, Error = "Tree node not found for assembly" };
-
-                // Select it in the tree view (highlights it in the left panel)
-                documentTreeView.TreeView.SelectItems(new[] { assemblyNode });
-                documentTreeView.TreeView.ScrollIntoView();
-
-                // Open/navigate to it in the active tab so decompiler shows it
-                bool openedTab = false;
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    documentTabService.Value.FollowReference(document, newTab: false, setFocus: true));
+                openedTab = true;
+            }
+            catch (Exception ex)
+            {
+                openError = ex.Message;
                 try
                 {
-                    documentTabService.Value.FollowReference(assembly, newTab: false, setFocus: true);
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        documentTabService.Value.FollowReference(assembly, newTab: false, setFocus: true));
                     openedTab = true;
+                    openError = null;
                 }
-                catch { }
+                catch (Exception fallbackEx)
+                {
+                    openError = fallbackEx.Message;
+                }
+            }
 
-                return new { Selected = true, OpenedTab = openedTab, Error = (string)null! };
-            });
+            bool selected = false;
+            string? selectionError = null;
+            for (int attempt = 0; attempt < 10 && !selected; attempt++)
+            {
+                var selectionState = System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    var node = documentTreeView.FindNode(document) ?? documentTreeView.FindNode(assembly);
+                    if (node == null)
+                        return false;
+
+                    documentTreeView.TreeView.SelectItems(new[] { node });
+                    documentTreeView.TreeView.ScrollIntoView();
+                    return true;
+                });
+
+                if (selectionState)
+                {
+                    selected = true;
+                    break;
+                }
+
+                System.Threading.Thread.Sleep(50);
+            }
+
+            if (!selected)
+                selectionError = "Tree node not materialized yet; active tab was updated, but tree selection could not be synchronized.";
 
             var response = new
             {
                 Assembly = assembly.FullName,
-                Selected = info.Selected,
-                OpenedTab = info.OpenedTab,
-                Error = info.Error
+                FilePath = document.Filename,
+                Selected = selected,
+                OpenedTab = openedTab,
+                Error = selectionError ?? openError
             };
 
             return new CallToolResult
@@ -756,37 +799,17 @@ namespace dnSpy.MCP.Server.Application
             var assemblyName = nameObj.ToString() ?? string.Empty;
             string? filePath = arguments.TryGetValue("file_path", out var fpObj) ? fpObj?.ToString() : null;
 
-            var normalizedPath = filePath?.Replace('/', '\\');
-            var removed = System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            {
-                // Only top-level nodes (direct children of root) can be passed to Remove()
-                var topLevel = documentTreeView.TreeView.Root.Children
-                    .Select(n => n.Data as DsDocumentNode)
-                    .Where(n => n != null)
-                    .Cast<DsDocumentNode>();
-
-                var toRemove = topLevel
-                    .Where(node =>
-                    {
-                        var asm = node.Document?.AssemblyDef;
-                        if (asm == null) return false;
-                        bool nameMatch = asm.Name.String.Equals(assemblyName, StringComparison.OrdinalIgnoreCase);
-                        if (!string.IsNullOrWhiteSpace(normalizedPath))
-                            return nameMatch && (node.Document!.Filename ?? "").Replace('/', '\\')
-                                .Equals(normalizedPath, StringComparison.OrdinalIgnoreCase);
-                        return nameMatch;
-                    })
-                    .ToList();
-
-                if (toRemove.Count == 0) return new List<string>();
-
-                var paths = toRemove.Select(n => n.Document?.Filename ?? n.Document?.AssemblyDef?.FullName ?? "?").ToList();
-                documentTreeView.Remove(toRemove);
-                return paths;
-            });
+            var documents = LoadedDocumentsHelper.FindDocuments(documentService, assemblyName, filePath)
+                .Where(d => d.AssemblyDef != null)
+                .ToList();
+            var removed = documents
+                .Select(d => d.Filename ?? d.AssemblyDef?.FullName ?? "?")
+                .ToList();
 
             if (removed.Count == 0)
                 throw new ArgumentException($"Assembly not found: {assemblyName}. Use list_assemblies to see loaded assemblies.");
+
+            documentService.Remove(documents);
 
             var result = JsonSerializer.Serialize(new { Removed = removed, Count = removed.Count }, new JsonSerializerOptions { WriteIndented = true });
             return new CallToolResult
@@ -800,19 +823,12 @@ namespace dnSpy.MCP.Server.Application
         /// </summary>
         public CallToolResult CloseAllAssemblies()
         {
-            var removed = System.Windows.Application.Current.Dispatcher.Invoke(() =>
-            {
-                // Only remove top-level nodes (direct children of root)
-                var topLevel = documentTreeView.TreeView.Root.Children
-                    .Select(n => n.Data as DsDocumentNode)
-                    .Where(n => n != null)
-                    .Cast<DsDocumentNode>()
-                    .ToList();
-                var paths = topLevel.Select(n => n.Document?.Filename ?? n.Document?.AssemblyDef?.FullName ?? "?").ToList();
-                if (topLevel.Count > 0)
-                    documentTreeView.Remove(topLevel);
-                return paths;
-            });
+            var removed = LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)
+                .Select(d => d.Filename ?? d.AssemblyDef?.FullName ?? "?")
+                .ToList();
+
+            if (removed.Count > 0)
+                documentService.Clear();
 
             var result = JsonSerializer.Serialize(new { Removed = removed, Count = removed.Count }, new JsonSerializerOptions { WriteIndented = true });
             return new CallToolResult

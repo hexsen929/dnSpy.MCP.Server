@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.26] - 2026-04-07
+
+### Fixed
+- `select_assembly` now follows the loaded document through `IDocumentTabService` first, then retries tree selection, so newly loaded assemblies no longer fail just because the WPF tree node is still materializing.
+- `close_assembly` / `close_all_assemblies` now remove documents through `IDsDocumentService` instead of relying on top-level tree nodes, eliminating another document-vs-tree race.
+- `run_script` now resolves the selected module from the active tab on the UI dispatcher before falling back to the tree selection, avoiding stale/null `module` globals caused by cross-thread tree access.
+- `list_native_modules` now detects P/Invoke imports from real `ImplMap` metadata instead of only looking for `DllImportAttribute` custom attributes.
+- Edit/resource operations now accept optional loaded-assembly path disambiguation, preventing accidental edits when multiple loaded files share the same internal assembly name.
+- `update_method_sourcecode` no longer drops non-framework `System.*` / `Microsoft.*` references from modern-target patch compilation just because their assembly name starts with a framework prefix.
+
+### Changed
+- Tool schemas now expose the new duplicate-assembly disambiguation parameters for the updated operations.
+
 ## [1.8.24] - 2026-04-07
 
 ### Fixed

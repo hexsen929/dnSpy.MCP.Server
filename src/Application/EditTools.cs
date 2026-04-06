@@ -114,7 +114,7 @@ namespace dnSpy.MCP.Server.Application {
 			var newVisibility = newVisObj.ToString()?.ToLower() ?? "";
 			var memberName = memberNameObj?.ToString() ?? "";
 
-			var assembly = FindAssemblyByName(assemblyName);
+			var assembly = FindAssemblyByName(assemblyName, GetOptionalFilePath(arguments));
 			if (assembly == null)
 				throw new ArgumentException($"Assembly not found: {assemblyName}");
 
@@ -213,7 +213,7 @@ namespace dnSpy.MCP.Server.Application {
 			if (string.IsNullOrWhiteSpace(newName))
 				throw new ArgumentException("new_name cannot be empty");
 
-			var assembly = FindAssemblyByName(assemblyName);
+			var assembly = FindAssemblyByName(assemblyName, GetOptionalFilePath(arguments));
 			if (assembly == null)
 				throw new ArgumentException($"Assembly not found: {assemblyName}");
 
@@ -287,7 +287,7 @@ namespace dnSpy.MCP.Server.Application {
 				throw new ArgumentException("assembly_name is required");
 
 			var assemblyName = asmNameObj.ToString() ?? "";
-			var assembly = FindAssemblyByName(assemblyName);
+			var assembly = FindAssemblyByName(assemblyName, GetOptionalFilePath(arguments));
 			if (assembly == null)
 				throw new ArgumentException($"Assembly not found: {assemblyName}");
 
@@ -337,7 +337,7 @@ namespace dnSpy.MCP.Server.Application {
 			if (!arguments.TryGetValue("type_full_name", out var typeNameObj))
 				throw new ArgumentException("type_full_name is required");
 
-			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 			if (assembly == null)
 				throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -384,7 +384,7 @@ namespace dnSpy.MCP.Server.Application {
 			if (!arguments.TryGetValue("type_full_name", out var typeNameObj))
 				throw new ArgumentException("type_full_name is required");
 
-			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 			if (assembly == null)
 				throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -475,7 +475,7 @@ namespace dnSpy.MCP.Server.Application {
 			if (!arguments.TryGetValue("type_full_name", out var typeNameObj))
 				throw new ArgumentException("type_full_name is required");
 
-			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 			if (assembly == null)
 				throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -523,7 +523,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("assembly_name", out var asmNameObj))
 			throw new ArgumentException("assembly_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments, allowGenericFilePath: false));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -582,7 +582,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("assembly_name", out var asmNameObj))
 			throw new ArgumentException("assembly_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -638,7 +638,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("assembly_name", out var asmNameObj))
 			throw new ArgumentException("assembly_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -677,7 +677,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("attribute_type_name", out var attrTypeObj))
 			throw new ArgumentException("attribute_type_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -743,7 +743,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("value", out var valueObj))
 			throw new ArgumentException("value is required (true/false, or architecture name for ProcessorArchitecture)");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -823,7 +823,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("assembly_name", out var asmNameObj))
 			throw new ArgumentException("assembly_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -866,7 +866,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("dll_path", out var dllPathObj))
 			throw new ArgumentException("dll_path is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -953,7 +953,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("assembly_name", out var asmNameObj))
 			throw new ArgumentException("assembly_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1002,7 +1002,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("resource_name", out var resNameObj))
 			throw new ArgumentException("resource_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1072,7 +1072,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("file_path", out var filePathObj))
 			throw new ArgumentException("file_path is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1114,7 +1114,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("resource_name", out var resNameObj))
 			throw new ArgumentException("resource_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1152,7 +1152,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("reference_name", out var refNameObj))
 			throw new ArgumentException("reference_name is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1208,7 +1208,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("output_directory", out var outDirObj))
 			throw new ArgumentException("output_directory is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1298,7 +1298,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("source_type", out var srcTypeObj))
 			throw new ArgumentException("source_type is required (full name of type to inject)");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1515,7 +1515,7 @@ namespace dnSpy.MCP.Server.Application {
 		arguments.TryGetValue("type_full_name", out var typeNameObj);
 		var typeNameStr = typeNameObj?.ToString() ?? "";
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "");
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
@@ -1612,7 +1612,7 @@ namespace dnSpy.MCP.Server.Application {
 		var typeFullName = typeNameObj.ToString() ?? "";
 		var methodName = methodNameObj.ToString() ?? "";
 
-		var assembly = FindAssemblyByName(assemblyName);
+		var assembly = FindAssemblyByName(assemblyName, GetOptionalFilePath(arguments));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {assemblyName}");
 
@@ -1805,6 +1805,19 @@ namespace dnSpy.MCP.Server.Application {
 			"private_protected" => FieldAttributes.FamANDAssem,
 			_ => throw new ArgumentException($"Invalid visibility: '{visibility}'. Use public/private/protected/internal/protected_internal/private_protected.")
 		};
+
+		static string? GetOptionalFilePath(Dictionary<string, object>? arguments, bool allowGenericFilePath = true) {
+			if (arguments == null)
+				return null;
+
+			if (arguments.TryGetValue("assembly_file_path", out var assemblyFpObj))
+				return assemblyFpObj?.ToString();
+			if (arguments.TryGetValue("loaded_file_path", out var loadedFpObj))
+				return loadedFpObj?.ToString();
+			if (!allowGenericFilePath)
+				return null;
+			return arguments.TryGetValue("file_path", out var fpObj) ? fpObj?.ToString() : null;
+		}
 
 		AssemblyDef? FindAssemblyByName(string name, string? filePath = null) {
 			return LoadedDocumentsHelper.FindAssembly(documentService, name, filePath);

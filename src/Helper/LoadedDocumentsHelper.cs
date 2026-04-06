@@ -8,6 +8,9 @@ namespace dnSpy.MCP.Server.Helper
 {
     static class LoadedDocumentsHelper
     {
+        public static string NormalizePath(string? path) =>
+            string.IsNullOrWhiteSpace(path) ? string.Empty : path.Replace('/', '\\');
+
         public static List<IDsDocument> GetDocumentsSnapshot(IDsDocumentService documentService)
         {
             if (documentService == null)
@@ -25,23 +28,32 @@ namespace dnSpy.MCP.Server.Helper
                 .Distinct()
                 .ToList()!;
 
-        public static AssemblyDef? FindAssembly(IDsDocumentService documentService, string name, string? filePath = null)
+        public static IDsDocument? FindDocument(IDsDocumentService documentService, string? name = null, string? filePath = null) =>
+            FindDocuments(documentService, name, filePath).FirstOrDefault();
+
+        public static List<IDsDocument> FindDocuments(IDsDocumentService documentService, string? name = null, string? filePath = null)
         {
             var docs = GetDocumentsSnapshot(documentService);
+            var normalizedPath = NormalizePath(filePath);
 
-            if (!string.IsNullOrWhiteSpace(filePath))
-            {
-                var normalized = filePath!.Replace('/', '\\');
-                var byPath = docs.FirstOrDefault(d =>
-                    !string.IsNullOrEmpty(d.Filename) &&
-                    d.Filename.Replace('/', '\\').Equals(normalized, StringComparison.OrdinalIgnoreCase));
-                if (byPath?.AssemblyDef != null)
-                    return byPath.AssemblyDef;
-            }
+            if (!string.IsNullOrWhiteSpace(normalizedPath))
+                docs = docs
+                    .Where(d => !string.IsNullOrWhiteSpace(d.Filename) &&
+                        NormalizePath(d.Filename).Equals(normalizedPath, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
 
-            return docs
-                .Select(d => d.AssemblyDef)
-                .FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(name))
+                docs = docs
+                    .Where(d => d.AssemblyDef != null &&
+                        d.AssemblyDef.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+            return docs;
+        }
+
+        public static AssemblyDef? FindAssembly(IDsDocumentService documentService, string name, string? filePath = null)
+        {
+            return FindDocument(documentService, name, filePath)?.AssemblyDef;
         }
 
         public static AssemblyDef? FindAssemblyByModule(IDsDocumentService documentService, string? moduleFilePath, string? moduleName = null)

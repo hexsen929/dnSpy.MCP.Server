@@ -165,10 +165,20 @@ namespace dnSpy.MCP.Server.Application
             ModuleDef? selectedModule = null;
             try
             {
-                var node = documentTreeView.TreeView.SelectedItem as DocumentTreeNodeData;
-                var doc = (node as DsDocumentNode)?.Document
-                    ?? node?.GetAncestorOrSelf<DsDocumentNode>()?.Document;
-                selectedModule = doc?.ModuleDef;
+                selectedModule = System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    var activeTab = documentTabService.Value.ActiveTab;
+                    var activeNode = activeTab?.Content?.Nodes?.FirstOrDefault();
+                    var activeDoc = (activeNode as DsDocumentNode)?.Document
+                        ?? activeNode?.GetAncestorOrSelf<DsDocumentNode>()?.Document;
+                    if (activeDoc?.ModuleDef != null)
+                        return activeDoc.ModuleDef;
+
+                    var selectedNode = documentTreeView.TreeView.SelectedItem as DocumentTreeNodeData;
+                    var selectedDoc = (selectedNode as DsDocumentNode)?.Document
+                        ?? selectedNode?.GetAncestorOrSelf<DsDocumentNode>()?.Document;
+                    return selectedDoc?.ModuleDef;
+                });
             }
             catch { /* no selection */ }
 

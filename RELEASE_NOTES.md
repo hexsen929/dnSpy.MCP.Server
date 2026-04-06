@@ -2,6 +2,26 @@
 
 ---
 
+## v1.8.26 — 2026-04-07
+
+### Fixed: duplicate-assembly editing and remaining UI/document races
+
+- `select_assembly` now opens the loaded document first and then retries tree synchronization, so it no longer fails just because the WPF tree node has not appeared yet
+- `close_assembly` / `close_all_assemblies` now remove assemblies through `IDsDocumentService`, not just the top-level tree nodes
+- `run_script` now resolves the selected module from the active tab on the UI thread before falling back to tree selection, avoiding null/stale `module` globals
+- edit/resource operations now support loaded-file-path disambiguation for duplicate assembly names, reducing the chance of patching or saving the wrong copy
+
+### Fixed: method patching and native import discovery
+
+- `update_method_sourcecode` now keeps real package/runtime dependencies for modern targets instead of broadly dropping every loaded `System.*` / `Microsoft.*` assembly
+- `list_native_modules` now reads real P/Invoke `ImplMap` metadata, so normal `[DllImport]` methods show up even when no custom attribute is emitted
+
+### Changed
+
+- relevant tool schemas now advertise the new duplicate-assembly disambiguation inputs
+
+---
+
 ## v1.8.25 — 2026-04-07
 
 ### Fixed: remaining document enumeration race/thread-safety issues

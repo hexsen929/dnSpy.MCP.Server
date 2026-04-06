@@ -338,7 +338,8 @@ namespace dnSpy.MCP.Server.Application
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
-                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" }
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" }
                     },
                     ["required"] = new List<string> { "assembly_name" }
                 }
@@ -821,6 +822,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Full name of the containing type (or the type itself when member_kind=type)" },
                         ["member_kind"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Kind of member: type, method, field, property, or event" },
                         ["member_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the member (ignored when member_kind=type)" },
@@ -836,6 +838,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["type_full_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Full name of the type" },
                         ["member_kind"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Kind of member: type, method, field, property, or event" },
                         ["old_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Current name of the member" },
@@ -851,6 +854,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Name of the assembly to save" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["output_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Output file path. Defaults to the original file location." }
                     },
                     ["required"] = new List<string> { "assembly_name" }
@@ -1120,7 +1124,8 @@ namespace dnSpy.MCP.Server.Application
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
-                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Assembly to inspect" }
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Assembly to inspect" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" }
                     },
                     ["required"] = new List<string> { "assembly_name" }
                 }
@@ -1132,6 +1137,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Assembly containing the resource" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["resource_name"] = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Exact resource name (use list_resources to find it)" },
                         ["output_path"]   = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Optional absolute path to save the raw resource bytes to disk" },
                         ["skip_base64"]   = new Dictionary<string, object> { ["type"] = "boolean", ["description"] = "Omit Base64 payload from the response (default false)" }
@@ -1146,6 +1152,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Target assembly" },
+                        ["assembly_file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["resource_name"] = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Name for the new resource (e.g. MyApp.config or costura.foo.dll.compressed)" },
                         ["file_path"]     = new Dictionary<string, object> { ["type"] = "string",  ["description"] = "Absolute path to the file to embed" },
                         ["is_public"]     = new Dictionary<string, object> { ["type"] = "boolean", ["description"] = "Resource visibility: true = Public (default), false = Private" }
@@ -1160,6 +1167,7 @@ namespace dnSpy.MCP.Server.Application
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Assembly containing the resource" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
                         ["resource_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Exact resource name to remove (use list_resources to find it)" }
                     },
                     ["required"] = new List<string> { "assembly_name", "resource_name" }

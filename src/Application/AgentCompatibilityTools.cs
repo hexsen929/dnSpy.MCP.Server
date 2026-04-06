@@ -618,7 +618,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			}
 
 			foreach (var document in LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)) {
-				if (modernTarget && IsFrameworkAssemblyName(document.AssemblyDef?.Name.String))
+				if (ShouldSkipLoadedDocumentReference(document, modernTarget))
 					continue;
 				AddPath(document.Filename);
 				try {
@@ -669,9 +669,38 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 				assemblyName.Equals("netstandard", StringComparison.OrdinalIgnoreCase) ||
 				assemblyName.Equals("System", StringComparison.OrdinalIgnoreCase) ||
 				assemblyName.Equals("System.Core", StringComparison.OrdinalIgnoreCase) ||
-				assemblyName.Equals("System.Private.CoreLib", StringComparison.OrdinalIgnoreCase) ||
-				assemblyName.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
-				assemblyName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase);
+				assemblyName.Equals("System.Runtime", StringComparison.OrdinalIgnoreCase) ||
+				assemblyName.Equals("System.Private.CoreLib", StringComparison.OrdinalIgnoreCase);
+		}
+
+		static bool ShouldSkipLoadedDocumentReference(IDsDocument document, bool modernTarget) {
+			if (!modernTarget)
+				return false;
+
+			var filename = LoadedDocumentsHelper.NormalizePath(document.Filename);
+			if (IsFrameworkReferencePath(filename))
+				return true;
+
+			try {
+				var moduleLocation = LoadedDocumentsHelper.NormalizePath(document.ModuleDef?.Location);
+				if (IsFrameworkReferencePath(moduleLocation))
+					return true;
+			}
+			catch {
+			}
+
+			return IsFrameworkAssemblyName(document.AssemblyDef?.Name.String) && string.IsNullOrWhiteSpace(filename);
+		}
+
+		static bool IsFrameworkReferencePath(string? path) {
+			if (string.IsNullOrWhiteSpace(path))
+				return false;
+
+			var normalized = LoadedDocumentsHelper.NormalizePath(path);
+			return normalized.IndexOf("\\dotnet\\packs\\Microsoft.NETCore.App.Ref\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				normalized.IndexOf("\\dotnet\\shared\\Microsoft.NETCore.App\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				normalized.IndexOf("\\Reference Assemblies\\Microsoft\\Framework\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				normalized.IndexOf("\\Windows\\Microsoft.NET\\Framework", StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 
 		static void AddTrustedPlatformAssemblyReferences(HashSet<string> paths) {
@@ -1357,7 +1386,13 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 
 		void RefreshTree() {
 			try {
-				documentTreeView.TreeView.RefreshAllNodes();
+				var dispatcher = System.Windows.Application.Current?.Dispatcher;
+				if (dispatcher == null || dispatcher.CheckAccess()) {
+					documentTreeView.TreeView.RefreshAllNodes();
+					return;
+				}
+
+				dispatcher.Invoke(() => documentTreeView.TreeView.RefreshAllNodes());
 			}
 			catch {
 			}
