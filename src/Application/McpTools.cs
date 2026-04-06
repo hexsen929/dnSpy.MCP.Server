@@ -203,6 +203,9 @@ namespace dnSpy.MCP.Server.Application
                     "detect_string_encryption" => InvokeLazy(malwareAnalysisTools, "DetectStringEncryption", arguments),
                     "find_byte_arrays" => InvokeLazy(malwareAnalysisTools, "FindByteArrays", arguments),
                     "find_embedded_pes" => InvokeLazy(malwareAnalysisTools, "FindEmbeddedPes", arguments),
+                    "detect_anti_debug" => InvokeLazy(malwareAnalysisTools, "DetectAntiDebug", arguments),
+                    "detect_anti_tamper" => InvokeLazy(malwareAnalysisTools, "DetectAntiTamper", arguments),
+                    "get_protection_report" => InvokeLazy(malwareAnalysisTools, "GetProtectionReport", arguments),
 
                     // PE / string scanning tools
                     "scan_pe_strings" => InvokeLazy(assemblyTools, "ScanPeStrings", arguments),

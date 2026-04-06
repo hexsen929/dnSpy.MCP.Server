@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Protection / malware triage tools** (7 tools — `MalwareAnalysisTools.cs`):
+- **Protection / malware triage tools** (10 tools — `MalwareAnalysisTools.cs`):
   - `triage_sample` — one-call suspicious assembly triage
   - `get_strings` — managed string extraction from field constants and `ldstr` sites
   - `search_il_pattern` — IL text / opcode-sequence hunting across methods
@@ -16,9 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `detect_string_encryption` — heuristic string-decryptor ranking
   - `find_byte_arrays` — byte-array/payload/key staging discovery
   - `find_embedded_pes` — embedded PE blob detection in resources and field data
+  - `detect_anti_debug` — anti-debugger API / blacklist / bootstrap heuristics
+  - `detect_anti_tamper` — anti-tamper / integrity / RVA bootstrap heuristics
+  - `get_protection_report` — one-call protection-oriented aggregate report
 
 ### Documentation
-- README now documents the new protection / malware analysis tool group and updates the tool count to 140+ on the main branch.
+- README now documents the expanded protection / malware analysis tool group and updates the tool count to 143+ on the main branch.
 - Architecture docs now include `MalwareAnalysisTools` and the expanded command surface.
 
 ---

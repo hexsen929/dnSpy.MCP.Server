@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: main branch (post-v1.8.1) | **Tools**: 140+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: main branch (post-v1.8.1) | **Tools**: 143+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -52,7 +52,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
 - AgentSmithers-style direct editing was added via `get_class_sourcecode`, `get_method_sourcecode`, `get_function_opcodes`, `set_function_opcodes`, `overwrite_full_function_opcodes`, and `update_method_sourcecode`
 - `set_function_opcodes` now supports branch and `switch` targets that point at newly inserted labels or surviving original instructions (`line:<index>` / `IL_<offset>`)
 - `update_method_sourcecode` now compiles replacement method bodies inside a generated wrapper that includes same-type member stubs, so patches can reference more fields, properties, events, and helper methods directly
-- first-pass protection / malware triage tools were added via `triage_sample`, `get_strings`, `search_il_pattern`, `analyze_static_constructors`, `detect_string_encryption`, `find_byte_arrays`, and `find_embedded_pes`
+- first-pass protection / malware triage tools were added via `triage_sample`, `get_strings`, `search_il_pattern`, `analyze_static_constructors`, `detect_string_encryption`, `find_byte_arrays`, `find_embedded_pes`, `detect_anti_debug`, `detect_anti_tamper`, and `get_protection_report`
 - GitHub Actions build/release artifacts are now shipped as **plugin-only bundles** for safer Windows deployment
 - tool discoverability now includes catalog metadata such as `category`, `hidden_by_default`, `is_legacy`, `preferred_replacement`, and `notes`
 
@@ -73,7 +73,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
 | **Runtime Reversing** | Resolve exports, disassemble native functions with Iced, patch/revert exports, inspect PEB, suspend/resume threads, inject native/managed DLLs |
 | **Memory Dump** | List runtime modules, dump .NET or native modules from memory, read/write process memory, extract PE sections |
 | **Static PE Analysis** | Scan raw PE bytes for strings; all-in-one ConfuserEx unpacker |
-| **Protection / Malware Analysis** | Triage suspicious assemblies, extract managed strings, search IL patterns, inspect static constructors, rank likely string decryptors, find byte-array payloads, detect embedded PE blobs |
+| **Protection / Malware Analysis** | Triage suspicious assemblies, extract managed strings, search IL patterns, inspect static constructors, rank likely string decryptors, find byte-array payloads, detect embedded PE blobs, detect anti-debug / anti-tamper heuristics, and build one-call protection reports |
 | **Deobfuscation** | de4dot integration: detect obfuscator, rename mangled symbols, decrypt strings. Both in-process (`deobfuscate_assembly`) and external process (`run_de4dot`) modes available in all builds |
 | **Window / Dialog** | List active dialog/message-box windows (Win32 `#32770` + WPF) in the dnSpy process; dismiss them by clicking any button by name (supports EN and ES) |
 | **Search** | Glob and regex search across all loaded assemblies |
@@ -746,6 +746,9 @@ Static-first triage helpers focused on suspicious managed loaders, protected sam
 | `detect_string_encryption` | Heuristically rank methods that look like string decryptors/decoders | `assembly_name` or `file_path` | `max_results` |
 | `find_byte_arrays` | Find field RVA blobs and method-level byte-array construction sites that may hide payloads, keys, or encrypted configuration | `assembly_name` or `file_path` | `max_results` |
 | `find_embedded_pes` | Detect PE payloads embedded in ManifestResource blobs or field data by looking for `MZ` headers and DOS stub markers | `assembly_name` or `file_path` | `max_results` |
+| `detect_anti_debug` | Heuristically detect native debugger APIs, managed `Debugger` probes, blacklist strings, and suspicious `.cctor` checks | `assembly_name` or `file_path` | `max_results` |
+| `detect_anti_tamper` | Heuristically detect `<Module>` bootstrap logic, `RuntimeHelpers.InitializeArray`, field RVA blobs, integrity/self-inspection APIs, and protection-family strings | `assembly_name` or `file_path` | `max_results` |
+| `get_protection_report` | Aggregate anti-debug, anti-tamper, decryptor, payload-staging, and entropy heuristics into a single protection-oriented report | `assembly_name` or `file_path` | `max_results` |
 
 #### Parameter details
 
@@ -769,6 +772,9 @@ Static-first triage helpers focused on suspicious managed loaders, protected sam
 - `analyze_static_constructors` is especially useful for loaders that stage config, resources, byte arrays, or bootstrap hooks in `.cctor`
 - `detect_string_encryption` is heuristic ranking only; use it to shortlist methods before manual decompilation or patching
 - `find_embedded_pes` complements `list_resources` / `get_resource` by pointing directly at likely second-stage payload carriers
+- `detect_anti_debug` is useful before live debugging so you can patch or route around obvious debugger checks first
+- `detect_anti_tamper` helps prioritize `<Module>` and RVA/InitializeArray-heavy bootstrap logic common in protected assemblies
+- `get_protection_report` is the best one-call summary when you want the overall protection picture before deciding whether to decompile, patch, or unpack
 
 ---
 

@@ -756,6 +756,45 @@ namespace dnSpy.MCP.Server.Application
                     },
                     ["required"] = new List<string>()
                 }
+            },
+            new ToolInfo {
+                Name = "detect_anti_debug",
+                Description = "Heuristically detect anti-debug checks such as debugger APIs, managed Debugger probes, tool blacklist strings, and .cctor bootstrap checks.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum hits to return per section (default 100)" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "detect_anti_tamper",
+                Description = "Heuristically detect anti-tamper and integrity checks such as <Module> bootstrap code, RuntimeHelpers.InitializeArray, field RVA blobs, self-inspection APIs, and protection-family strings.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum hits to return per section (default 100)" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "get_protection_report",
+                Description = "Aggregate anti-debug, anti-tamper, decryptor, payload-staging, and entropy heuristics into a single protection-oriented report for a suspicious assembly.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum hits/candidates to return per section (default 100)" }
+                    },
+                    ["required"] = new List<string>()
+                }
             }
         };
 
@@ -2232,6 +2271,15 @@ namespace dnSpy.MCP.Server.Application
                 break;
             case "find_embedded_pes":
                 metadata.Notes = "Looks for PE headers inside resources or field data. Useful for second-stage payload extraction and packer triage.";
+                break;
+            case "detect_anti_debug":
+                metadata.Notes = "Heuristic anti-debug triage. Surfaces debugger API probes, managed Debugger checks, tool blacklist strings, and suspicious .cctor bootstrap activity.";
+                break;
+            case "detect_anti_tamper":
+                metadata.Notes = "Heuristic anti-tamper triage. Focuses on <Module> bootstrap code, RuntimeHelpers.InitializeArray, field RVA blobs, and integrity/self-inspection APIs.";
+                break;
+            case "get_protection_report":
+                metadata.Notes = "One-call protection summary that aggregates anti-debug, anti-tamper, string-decryptor, payload-staging, and entropy hints for suspicious assemblies.";
                 break;
             case "list_tools":
                 metadata.Notes = "Default mode hides tools marked hidden_by_default. Use mode='full' or include_hidden=true for the complete catalog.";

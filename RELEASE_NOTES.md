@@ -17,6 +17,9 @@ The main branch now includes an initial static triage toolset for suspicious man
 | `detect_string_encryption` | Heuristic ranking of likely string decryptors/decoders |
 | `find_byte_arrays` | Discovery of field RVA blobs and method-level byte-array staging sites |
 | `find_embedded_pes` | Detection of PE payloads hidden in resources or field data |
+| `detect_anti_debug` | Anti-debugger heuristic report over P/Invokes, managed checks, blacklist strings, and `.cctor` activity |
+| `detect_anti_tamper` | Anti-tamper heuristic report over `<Module>` bootstrap code, RVA blobs, `InitializeArray`, and integrity/self-inspection APIs |
+| `get_protection_report` | One-call aggregate protection report combining anti-debug, anti-tamper, decryptor, payload, and entropy signals |
 
 ### Design intent
 
@@ -26,7 +29,7 @@ The main branch now includes an initial static triage toolset for suspicious man
 
 ### Current tool count on main
 
-- **140+ tools**
+- **143+ tools**
 
 ---
 

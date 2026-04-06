@@ -31,7 +31,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 **Structure**: Split into two files via C# `partial class`
 
 #### **McpTools.cs** — Dispatch & Helpers
-- `ExecuteTool(toolName, arguments)` — Main dispatcher switch for 140 canonical tools plus legacy compatibility aliases
+- `ExecuteTool(toolName, arguments)` — Main dispatcher switch for 143 canonical tools plus legacy compatibility aliases
 - `ListTools()` — Self-discovery endpoint
 - `InvokeLazy<T>()` — Reflection-based delegation to lazy-loaded service classes
 - `FindAssemblyByName()` / `FindTypeInAssembly()` — Assembly/type lookup helpers
@@ -254,6 +254,9 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 - `DetectStringEncryption()` - Heuristic ranking of string decryptor candidates
 - `FindByteArrays()` - Byte-array staging discovery
 - `FindEmbeddedPes()` - Detect PE payloads hidden in resources or field data
+- `DetectAntiDebug()` - Heuristic anti-debug triage over native APIs, managed checks, blacklist strings, and bootstrap logic
+- `DetectAntiTamper()` - Heuristic anti-tamper triage over `<Module>`, RVA blobs, InitializeArray, and self-inspection APIs
+- `GetProtectionReport()` - Aggregate protection-oriented summary for suspicious assemblies
 
 ---
 
@@ -324,7 +327,7 @@ McpServer.ProcessRequest()
 McpTools.ExecuteTool(toolName, args)
     ↓
 ┌─────────────────────────────────────────────────┐
-│ Command Routing (switch statement — 140 tools)  │
+│ Command Routing (switch statement — 143 tools)  │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 ├─ Inline Helpers (McpTools.cs)                   │
@@ -400,7 +403,7 @@ McpServer.Start()
 ## Key Design Patterns
 
 ### 1. **Lazy Initialization**
-Core service classes are wrapped in `Lazy<T>` to defer MEF construction until first use, reducing startup overhead and keeping startup responsive even as the tool surface grows past 140 commands.
+Core service classes are wrapped in `Lazy<T>` to defer MEF construction until first use, reducing startup overhead and keeping startup responsive even as the tool surface grows past 143 commands.
 
 ### 2. **Reflection-Based Delegation**
 `InvokeLazy<T>(lazy, methodName, arguments)` invokes a method on a lazy-loaded service by name. On `TargetInvocationException` the inner exception is logged and re-thrown, preserving the original stack trace.
@@ -435,7 +438,7 @@ Usage-finding commands use dnlib IL traversal to identify:
 | Method / IL | `decompile_method`, `get_method_il`, `get_method_il_bytes`, `get_method_exception_handlers`, `dump_cordbg_il` | 5 | ✅ |
 | Analysis | `find_who_calls_method`, `find_who_uses_type`, `find_who_reads_field`, `find_who_writes_field`, `analyze_type_inheritance`, `analyze_call_graph`, `find_dependency_chain`, `find_dead_code` | 9 | ✅ |
 | Control Flow | `get_control_flow_graph`, `get_basic_blocks` | 2 | ✅ |
-| Protection / Malware | `triage_sample`, `get_strings`, `search_il_pattern`, `analyze_static_constructors`, `detect_string_encryption`, `find_byte_arrays`, `find_embedded_pes` | 7 | ✅ |
+| Protection / Malware | `triage_sample`, `get_strings`, `search_il_pattern`, `analyze_static_constructors`, `detect_string_encryption`, `find_byte_arrays`, `find_embedded_pes`, `detect_anti_debug`, `detect_anti_tamper`, `get_protection_report` | 10 | ✅ |
 | Edit | `change_member_visibility`, `rename_member`, `save_assembly`, `get/edit_assembly_metadata`, `set_assembly_flags`, `list/add/remove_assembly_reference`, `inject_type_from_dll`, `patch_method_to_ret` | 15 | ✅ |
 | Agent Compatibility | `get_class_sourcecode`, `get_method_sourcecode`, `get_function_opcodes`, `set_function_opcodes`, `overwrite_full_function_opcodes`, `update_method_sourcecode` | 6 | ✅ |
 | Resource | `list_resources`, `get_resource`, `add_resource`, `remove_resource`, `extract_costura` | 5 | ✅ |
@@ -448,7 +451,7 @@ Usage-finding commands use dnlib IL traversal to identify:
 | SourceMap | `get_source_map_name`, `set_source_map_name`, `list_source_map_entries`, `save_source_map`, `load_source_map` | 5 | ✅ |
 | Native Runtime | `get_proc_address`, `patch_native_function`, `disassemble_native_function`, `inject_native_dll`, `inject_managed_dll`, `revert_patch`, `list_active_patches`, `read_native_memory`, `suspend_threads`, `resume_threads`, `get_peb` | 11 | ✅ |
 | Utility | `list_tools`, `get_mcp_config`, `reload_mcp_config` | 3 | ✅ |
-| **Total** | | **140** | ✅ |
+| **Total** | | **143** | ✅ |
 
 ---
 
@@ -534,4 +537,4 @@ dnSpy.MCP.Server/
 ## Document Version
 - **Version**: main branch (post-v1.8.1)
 - **Updated**: 2026-04-06
-- **Status**: Architecture documented for the current main branch — 140 tools
+- **Status**: Architecture documented for the current main branch — 143 tools
