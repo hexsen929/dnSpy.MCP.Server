@@ -7,8 +7,10 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 
 namespace dnSpy.MCP.Server.Application
 {
@@ -16,11 +18,13 @@ namespace dnSpy.MCP.Server.Application
     public sealed class DiscoveryTools
     {
         readonly IDocumentTreeView documentTreeView;
+        readonly IDsDocumentService documentService;
 
         [ImportingConstructor]
-        public DiscoveryTools(IDocumentTreeView documentTreeView)
+        public DiscoveryTools(IDocumentTreeView documentTreeView, IDsDocumentService documentService)
         {
             this.documentTreeView = documentTreeView;
+            this.documentService = documentService;
         }
 
         public CallToolResult SearchTypes(Dictionary<string, object>? arguments)
@@ -40,10 +44,7 @@ namespace dnSpy.MCP.Server.Application
                 regex = new Regex(regexPattern, RegexOptions.IgnoreCase);
             }
 
-            var results = documentTreeView.GetAllModuleNodes()
-                .SelectMany(m => m.Document?.AssemblyDef != null
-                    ? m.Document.AssemblyDef.Modules.SelectMany(mod => mod.Types)
-                    : Enumerable.Empty<TypeDef>())
+            var results = LoadedDocumentsHelper.GetAllTypesSnapshot(documentService)
                 .Where(t => regex != null
                     ? regex.IsMatch(t.FullName)
                     : t.FullName.Contains(query, StringComparison.OrdinalIgnoreCase))
@@ -78,11 +79,7 @@ namespace dnSpy.MCP.Server.Application
                 throw new ArgumentException($"Method not found: {methodName}");
 
             var targetFullName = targetMethod.FullName;
-            var assemblies = System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                documentTreeView.GetAllModuleNodes()
-                    .Select(m => m.Document?.AssemblyDef)
-                    .Where(a => a != null)
-                    .ToList());
+            var assemblies = LoadedDocumentsHelper.GetAssembliesSnapshot(documentService);
 
             var callers = assemblies
                 .SelectMany(a => a!.Modules)
@@ -155,9 +152,7 @@ namespace dnSpy.MCP.Server.Application
         }
 
         AssemblyDef? FindAssemblyByName(string name) =>
-            documentTreeView.GetAllModuleNodes()
-                .Select(m => m.Document?.AssemblyDef)
-                .FirstOrDefault(a => a?.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase) == true);
+            LoadedDocumentsHelper.FindAssembly(documentService, name);
 
         static TypeDef? FindTypeInAssembly(AssemblyDef assembly, string typeFullName) =>
             assembly.Modules

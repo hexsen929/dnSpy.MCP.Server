@@ -29,8 +29,10 @@ using dnlib.DotNet.Emit;
 using dnlib.DotNet.MD;
 using dnlib.DotNet.Writer;
 using dnSpy.Contracts.Decompiler;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 
 namespace dnSpy.MCP.Server.Application {
 	/// <summary>
@@ -41,11 +43,13 @@ namespace dnSpy.MCP.Server.Application {
 	[Export(typeof(EditTools))]
 	public sealed class EditTools {
 		readonly IDocumentTreeView documentTreeView;
+		readonly IDsDocumentService documentService;
 		readonly IDecompilerService decompilerService;
 
 		[ImportingConstructor]
-		public EditTools(IDocumentTreeView documentTreeView, IDecompilerService decompilerService) {
+		public EditTools(IDocumentTreeView documentTreeView, IDsDocumentService documentService, IDecompilerService decompilerService) {
 			this.documentTreeView = documentTreeView;
+			this.documentService = documentService;
 			this.decompilerService = decompilerService;
 		}
 
@@ -1803,16 +1807,7 @@ namespace dnSpy.MCP.Server.Application {
 		};
 
 		AssemblyDef? FindAssemblyByName(string name, string? filePath = null) {
-			if (!string.IsNullOrEmpty(filePath)) {
-				var normalized = filePath!.Replace('/', '\\');
-				var byPath = documentTreeView.GetAllModuleNodes()
-					.FirstOrDefault(m => (m.Document?.Filename ?? "").Replace('/', '\\')
-						.Equals(normalized, StringComparison.OrdinalIgnoreCase));
-				if (byPath?.Document?.AssemblyDef != null) return byPath.Document.AssemblyDef;
-			}
-			return documentTreeView.GetAllModuleNodes()
-				.Select(m => m.Document?.AssemblyDef)
-				.FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+			return LoadedDocumentsHelper.FindAssembly(documentService, name, filePath);
 		}
 
 		TypeDef? FindTypeInAssembly(AssemblyDef assembly, string fullName) =>

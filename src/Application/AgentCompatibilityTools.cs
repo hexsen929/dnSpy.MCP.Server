@@ -29,8 +29,10 @@ using System.Text.RegularExpressions;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
 using dnSpy.Contracts.Decompiler;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using ReflectionBindingFlags = System.Reflection.BindingFlags;
@@ -42,6 +44,7 @@ namespace dnSpy.MCP.Server.Application {
 	[Export(typeof(AgentCompatibilityTools))]
 	public sealed class AgentCompatibilityTools {
 		readonly IDocumentTreeView documentTreeView;
+		readonly IDsDocumentService documentService;
 		readonly IDecompilerService decompilerService;
 
 		static readonly JsonSerializerOptions PrettyJson = new JsonSerializerOptions { WriteIndented = true };
@@ -50,8 +53,9 @@ namespace dnSpy.MCP.Server.Application {
 		static readonly Regex fieldSpecRegex = new Regex(@"^(?<type>.+?)::(?<field>[^\s]+)$", RegexOptions.Compiled);
 
 		[ImportingConstructor]
-		public AgentCompatibilityTools(IDocumentTreeView documentTreeView, IDecompilerService decompilerService) {
+		public AgentCompatibilityTools(IDocumentTreeView documentTreeView, IDsDocumentService documentService, IDecompilerService decompilerService) {
 			this.documentTreeView = documentTreeView;
+			this.documentService = documentService;
 			this.decompilerService = decompilerService;
 		}
 
@@ -599,10 +603,10 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			AddPath(typeof(System.Threading.Tasks.Task).Assembly.Location);
 			AddPath(typeof(System.Threading.CancellationToken).Assembly.Location);
 
-			foreach (var moduleNode in documentTreeView.GetAllModuleNodes()) {
-				AddPath(moduleNode.Document?.Filename);
+			foreach (var document in LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)) {
+				AddPath(document.Filename);
 				try {
-					AddPath(moduleNode.GetModule().Location);
+					AddPath(document.ModuleDef?.Location);
 				}
 				catch {
 				}
@@ -1162,8 +1166,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 		ITypeDefOrRef ResolveTypeReference(ModuleDef targetModule, string rawTypeName) {
 			var typeName = NormalizeTypeName(rawTypeName);
 
-			var loadedType = documentTreeView.GetAllModuleNodes()
-				.SelectMany(n => GetAllTypesRecursive(n.GetModule().Types))
+			var loadedType = LoadedDocumentsHelper.GetAllTypesSnapshot(documentService)
 				.FirstOrDefault(t => NormalizeTypeName(t.FullName) == typeName || NormalizeTypeName(t.Name.String) == typeName);
 			if (loadedType != null)
 				return targetModule.Import(loadedType);
@@ -1184,8 +1187,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			var methodName = match.Groups["method"].Value.Trim();
 			var parameterSpecs = SplitParameterList(match.Groups["params"].Value).Select(NormalizeTypeName).ToArray();
 
-			var loadedType = documentTreeView.GetAllModuleNodes()
-				.SelectMany(n => GetAllTypesRecursive(n.GetModule().Types))
+			var loadedType = LoadedDocumentsHelper.GetAllTypesSnapshot(documentService)
 				.FirstOrDefault(t => NormalizeTypeName(t.FullName) == NormalizeTypeName(typeName) || NormalizeTypeName(t.Name.String) == NormalizeTypeName(typeName));
 			if (loadedType != null) {
 				var method = loadedType.Methods
@@ -1218,8 +1220,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			var typeName = match.Groups["type"].Value.Trim();
 			var fieldName = match.Groups["field"].Value.Trim();
 
-			var loadedType = documentTreeView.GetAllModuleNodes()
-				.SelectMany(n => GetAllTypesRecursive(n.GetModule().Types))
+			var loadedType = LoadedDocumentsHelper.GetAllTypesSnapshot(documentService)
 				.FirstOrDefault(t => NormalizeTypeName(t.FullName) == NormalizeTypeName(typeName) || NormalizeTypeName(t.Name.String) == NormalizeTypeName(typeName));
 			if (loadedType != null) {
 				var field = loadedType.Fields.FirstOrDefault(f => string.Equals(f.Name.String, fieldName, StringComparison.OrdinalIgnoreCase));
@@ -1458,18 +1459,7 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 		}
 
 		AssemblyDef? FindAssemblyByName(string name, string? filePath = null) {
-			if (!string.IsNullOrEmpty(filePath)) {
-				var normalized = filePath!.Replace('/', '\\');
-				var byPath = documentTreeView.GetAllModuleNodes()
-					.FirstOrDefault(m => (m.Document?.Filename ?? string.Empty).Replace('/', '\\')
-						.Equals(normalized, StringComparison.OrdinalIgnoreCase));
-				if (byPath?.Document?.AssemblyDef != null)
-					return byPath.Document.AssemblyDef;
-			}
-
-			return documentTreeView.GetAllModuleNodes()
-				.Select(m => m.Document?.AssemblyDef)
-				.FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+			return LoadedDocumentsHelper.FindAssembly(documentService, name, filePath);
 		}
 
 		TypeDef? FindTypeInAssemblyAll(AssemblyDef assembly, string fullName) =>

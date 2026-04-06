@@ -32,6 +32,7 @@ using dnSpy.Contracts.Documents.Tabs;
 using dnSpy.Contracts.Documents.Tabs.DocViewer;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 
 namespace dnSpy.MCP.Server.Application
 {
@@ -63,26 +64,22 @@ namespace dnSpy.MCP.Server.Application
 
         public CallToolResult ListAssemblies()
         {
-            var assemblies = System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                documentTreeView.GetAllModuleNodes()
-                    .Where(m => m.Document?.AssemblyDef != null)
-                    // Group by the IDsDocument so multi-module assemblies appear once
-                    .GroupBy(m => m.Document)
-                    .Select(g =>
+            var assemblies = LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)
+                .Where(d => d.AssemblyDef != null)
+                .Select(doc =>
+                {
+                    var a = doc.AssemblyDef!;
+                    return new
                     {
-                        var doc = g.Key!;
-                        var a = doc.AssemblyDef!;
-                        return new
-                        {
-                            Name = a.Name.String,
-                            Version = a.Version?.ToString() ?? "N/A",
-                            FullName = a.FullName,
-                            Culture = string.IsNullOrEmpty(a.Culture) ? "neutral" : a.Culture.String,
-                            PublicKeyToken = a.PublicKeyToken?.ToString() ?? "null",
-                            FilePath = doc.Filename ?? ""
-                        };
-                    })
-                    .ToList());
+                        Name = a.Name.String,
+                        Version = a.Version?.ToString() ?? "N/A",
+                        FullName = a.FullName,
+                        Culture = string.IsNullOrEmpty(a.Culture) ? "neutral" : a.Culture.String,
+                        PublicKeyToken = a.PublicKeyToken?.ToString() ?? "null",
+                        FilePath = doc.Filename ?? ""
+                    };
+                })
+                .ToList();
 
             var result = JsonSerializer.Serialize(assemblies, new JsonSerializerOptions { WriteIndented = true });
             return new CallToolResult
@@ -587,10 +584,7 @@ namespace dnSpy.MCP.Server.Application
 
         AssemblyDef? FindAssemblyByName(string name)
         {
-            return System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                documentTreeView.GetAllModuleNodes()
-                    .Select(m => m.Document?.AssemblyDef)
-                    .FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase)));
+            return LoadedDocumentsHelper.FindAssembly(documentService, name);
         }
 
         /// <summary>
@@ -600,15 +594,7 @@ namespace dnSpy.MCP.Server.Application
         /// </summary>
         AssemblyDef? FindAssemblyByFilePath(string filePath)
         {
-            var normalized = filePath.Replace('/', '\\');
-            return System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                documentTreeView.GetAllModuleNodes()
-                    .Where(m => m.Document?.AssemblyDef != null &&
-                                !string.IsNullOrEmpty(m.Document.Filename) &&
-                                (m.Document.Filename.Replace('/', '\\'))
-                                    .Equals(normalized, StringComparison.OrdinalIgnoreCase))
-                    .Select(m => m.Document!.AssemblyDef)
-                    .FirstOrDefault());
+            return LoadedDocumentsHelper.FindAssembly(documentService, string.Empty, filePath);
         }
 
         string EncodeCursor(int offset, int pageSize)
