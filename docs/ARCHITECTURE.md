@@ -544,6 +544,6 @@ dnSpy.MCP.Server/
 ---
 
 ## Document Version
-- **Version**: main branch (post-v1.8.1)
+- **Version**: 1.8.2
 - **Updated**: 2026-04-06
-- **Status**: Architecture documented for the current main branch — 143 tools
+- **Status**: Architecture documented for v1.8.2 — 143 tools

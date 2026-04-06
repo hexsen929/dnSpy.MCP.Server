@@ -265,7 +265,7 @@ namespace dnSpy.MCP.Server.Helper {
 				McpLogger.Info("═══════════════════════════════════════════════════════");
 				McpLogger.Info("MCP Server Output Pane Initialized");
 				McpLogger.Info($"Log file location: {McpLogger.LogFilePath}");
-				McpLogger.Info($"Version: 1.0.0");
+				McpLogger.Info($"Version: {global::dnSpy.MCP.Server.ServerBuildInfo.Version}");
 				McpLogger.Info("═══════════════════════════════════════════════════════");
 
 				// Flush any messages that were buffered before the pane existed

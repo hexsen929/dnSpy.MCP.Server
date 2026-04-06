@@ -94,7 +94,7 @@ namespace dnSpy.MCP.Server.Core {
 				},
 				ServerInfo = new ServerInfo {
 					Name = "dnSpy MCP Server",
-					Version = "1.1.0",
+					Version = global::dnSpy.MCP.Server.ServerBuildInfo.Version,
 				},
 			};
 		}

@@ -288,7 +288,7 @@ namespace dnSpy.MCP.Server.Contracts {
 		/// Server version.
 		/// </summary>
 		[JsonPropertyName("version")]
-		public string Version { get; set; } = "1.0.0";
+		public string Version { get; set; } = global::dnSpy.MCP.Server.ServerBuildInfo.Version;
 	}
 
 	/// <summary>

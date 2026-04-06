@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: main branch (post-v1.8.1) | **Tools**: 143+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.2 | **Tools**: 143+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 

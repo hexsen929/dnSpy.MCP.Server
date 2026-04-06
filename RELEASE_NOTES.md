@@ -2,7 +2,7 @@
 
 ---
 
-## main branch — post-v1.8.1
+## v1.8.2 — 2026-04-06
 
 ### New: Protection / Malware Triage Toolkit
 
