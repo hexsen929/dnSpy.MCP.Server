@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.6 — 2026-04-06
+
+### Changed: Removed localhost dual-prefix listener logic
+
+- listener startup now binds only the configured host/prefix
+- removed automatic localhost + 127.0.0.1 dual registration and fallback probing
+- intended to rule out listener-side side effects while keeping `127.0.0.1` as the default local bind host
+
+---
+
 ## v1.8.5 — 2026-04-06
 
 ### Changed: Prefer 127.0.0.1 for local defaults
@@ -9,7 +19,7 @@
 - default generated `mcp-config.json` now uses `127.0.0.1:3100`
 - bundled stdio proxy wrapper now defaults to `http://127.0.0.1:3100/mcp`
 - README examples and client snippets now prefer the loopback IP form
-- `localhost` compatibility remains in place; the server still supports both forms when configured that way
+- listener startup now binds only the configured host/prefix and no longer auto-registers an extra loopback prefix
 
 ---
 

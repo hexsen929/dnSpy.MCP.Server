@@ -126,29 +126,6 @@ namespace dnSpy.MCP.Server.Communication {
 			return $"http://{normalizedHost}:{port}/";
 		}
 
-		static string[] BuildPrefixes(string host, int port) {
-			if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)) {
-				return new[] {
-					BuildPrefix("localhost", port),
-					BuildPrefix("127.0.0.1", port),
-				};
-			}
-
-			return new[] { BuildPrefix(host, port) };
-		}
-
-		static string[][] BuildPrefixVariants(string host, int port) {
-			if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)) {
-				return new[] {
-					new[] { BuildPrefix("localhost", port), BuildPrefix("127.0.0.1", port) },
-					new[] { BuildPrefix("localhost", port) },
-					new[] { BuildPrefix("127.0.0.1", port) },
-				};
-			}
-
-			return new[] { new[] { BuildPrefix(host, port) } };
-		}
-
 		void StartHttpListenerServer() {
 			Task.Run(async () => {
 				var cancellationToken = cts!.Token;
@@ -157,75 +134,58 @@ namespace dnSpy.MCP.Server.Communication {
 
 				for (var attempt = 0; attempt < maxAttempts; attempt++) {
 					var currentPort = port + attempt;
-					Exception? lastError = null;
-					var prefixVariants = BuildPrefixVariants(settings.Host, currentPort);
+					HttpListener? listener = null;
+					var prefix = BuildPrefix(settings.Host, currentPort);
 
-					for (int variantIndex = 0; variantIndex < prefixVariants.Length; variantIndex++) {
-						HttpListener? listener = null;
-						var prefixes = prefixVariants[variantIndex];
+					try {
+						listener = new HttpListener();
+						listener.Prefixes.Add(prefix);
+						listener.Start();
 
-						try {
-							listener = new HttpListener();
-							foreach (var prefix in prefixes)
-								listener.Prefixes.Add(prefix);
-							listener.Start();
+						httpListener = listener;
+						actualPort = currentPort;
 
-							httpListener = listener;
-							actualPort = currentPort;
+						McpLogger.Info("═══════════════════════════════════════════════════════");
+						McpLogger.Info("Starting MCP Server");
+						McpLogger.Info($"Host: {settings.Host}");
+						McpLogger.Info($"Port: {actualPort}");
+						McpLogger.Info($"Prefix: {prefix}");
+						McpLogger.Info("Routes: GET /sse, POST /message, GET|POST|DELETE /mcp, GET /health");
+						McpLogger.Info("═══════════════════════════════════════════════════════");
 
-							McpLogger.Info("═══════════════════════════════════════════════════════");
-							McpLogger.Info("Starting MCP Server");
-							McpLogger.Info($"Host: {settings.Host}");
-							McpLogger.Info($"Port: {actualPort}");
-							if (prefixes.Length > 1)
-								McpLogger.Info($"Prefixes: {string.Join(", ", prefixes)}");
-							else
-								McpLogger.Info($"Prefix: {prefixes[0]}");
-							if (variantIndex > 0)
-								McpLogger.Warning($"Fell back to reduced listener prefix set for host '{settings.Host}'.");
-							McpLogger.Info("Routes: GET /sse, POST /message, GET|POST|DELETE /mcp, GET /health");
-							McpLogger.Info("═══════════════════════════════════════════════════════");
+						await BroadcastStatusAsync("running", cancellationToken).ConfigureAwait(false);
 
-							await BroadcastStatusAsync("running", cancellationToken).ConfigureAwait(false);
-
-							while (!cancellationToken.IsCancellationRequested) {
-								HttpListenerContext context;
-								try {
-									context = await listener.GetContextAsync().ConfigureAwait(false);
-								}
-								catch (HttpListenerException) {
-									break;
-								}
-								catch (ObjectDisposedException) {
-									break;
-								}
-
-								_ = HandleHttpRequestAsync(context, cancellationToken);
+						while (!cancellationToken.IsCancellationRequested) {
+							HttpListenerContext context;
+							try {
+								context = await listener.GetContextAsync().ConfigureAwait(false);
+							}
+							catch (HttpListenerException) {
+								break;
+							}
+							catch (ObjectDisposedException) {
+								break;
 							}
 
-							return;
+							_ = HandleHttpRequestAsync(context, cancellationToken);
 						}
-						catch (HttpListenerException ex) {
-							lastError = ex;
-							McpLogger.Warning($"Listener prefix set failed on port {currentPort}: {string.Join(", ", prefixes)} => {ex.Message}");
-							listener?.Close();
-						}
-						catch (Exception ex) {
-							lastError = ex;
-							McpLogger.Exception(ex, $"Error starting HttpListener on port {currentPort} with prefixes: {string.Join(", ", prefixes)}");
-							listener?.Close();
-						}
-					}
 
-					if (lastError is HttpListenerException hex && hex.ErrorCode == 5) {
-						McpLogger.Exception(hex, $"Access denied to port {currentPort}. Tried prefix sets for host '{settings.Host}'.");
 						break;
 					}
-
-					if (lastError is HttpListenerException portEx)
-						McpLogger.Warning($"Port {currentPort} unavailable after trying all prefix variants: {portEx.Message}");
-					else if (lastError != null)
-						McpLogger.Exception(lastError, $"Error starting HttpListener on port {currentPort}");
+					catch (HttpListenerException ex) when (ex.ErrorCode == 5) {
+						McpLogger.Exception(ex, $"Access denied to port {currentPort}. Run: netsh http add urlacl url={prefix} user=Everyone");
+						listener?.Close();
+						break;
+					}
+					catch (HttpListenerException ex) {
+						McpLogger.Warning($"Port {currentPort} unavailable: {ex.Message}");
+						listener?.Close();
+					}
+					catch (Exception ex) {
+						McpLogger.Exception(ex, $"Error starting HttpListener on port {currentPort}");
+						listener?.Close();
+						break;
+					}
 				}
 			}, cts!.Token);
 		}

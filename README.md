@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.5 | **Tools**: 143+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.6 | **Tools**: 143+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -282,7 +282,7 @@ set DNSPY_MCP_API_KEY=your_api_key_if_enabled
 stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd
 ```
 
-For local-only use, prefer `127.0.0.1` over `localhost` in client configs. Both are supported by the server, but `127.0.0.1` avoids hostname-specific quirks seen in some MCP clients, Wine/CrossOver setups, and Windows `HttpListener` environments.
+For local-only use, prefer `127.0.0.1` over `localhost` in client configs. The server binds exactly the configured host/prefix, and `127.0.0.1` avoids hostname-specific quirks seen in some MCP clients, Wine/CrossOver setups, and Windows `HttpListener` environments.
 
 Notes:
 
@@ -1179,7 +1179,7 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `host` | `"127.0.0.1"` | Bind address for local-only access. `localhost` is also supported. Use `"0.0.0.0"` to listen on all interfaces (for remote debugging from a sandbox or VM). See note below. |
+| `host` | `"127.0.0.1"` | Bind address for local-only access. `localhost` is also supported, but the server binds only the configured host value. Use `"0.0.0.0"` to listen on all interfaces (for remote debugging from a sandbox or VM). See note below. |
 | `port` | `3100` | TCP port the server listens on. |
 | `requireApiKey` | `false` | Require `X-API-Key` / `Authorization: Bearer` on every request. |
 | `apiKey` | `""` | API key value. Generate with `openssl rand -hex 32`. |

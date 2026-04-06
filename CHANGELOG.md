@@ -5,14 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.8.5] - 2026-04-06
+## [1.8.6] - 2026-04-06
 
 ### Changed
 - Default local bind host changed from `localhost` to `127.0.0.1` in `McpConfig`, generated `mcp-config.json`, and the bundled stdio wrapper.
 - README examples and client snippets now prefer `http://127.0.0.1:3100/mcp` for local-only setups.
+- Removed the localhost dual-prefix listener/fallback logic and restored single-prefix binding based strictly on the configured `host`.
 
 ### Notes
-- `localhost` loopback compatibility remains implemented: when the server host is set to `localhost`, the listener still attempts to register both `localhost` and `127.0.0.1` with automatic fallback.
+- Listener startup no longer attempts dual-prefix loopback registration; the configured `host` is bound as-is.
+
+## [1.8.5] - 2026-04-06
 
 ## [1.8.4] - 2026-04-06
 
