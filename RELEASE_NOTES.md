@@ -2,6 +2,19 @@
 
 ---
 
+## v1.8.22 — 2026-04-07
+
+### Changed: extension-folder output and package layout
+
+- the MCP plugin now builds into dnSpy's extension-style directory:
+  - `bin/Release/net10.0-windows/Extensions/dnSpy.MCP.Server/`
+  - `bin/Release/net48/Extensions/dnSpy.MCP.Server/`
+- build/release zips now preserve that same structure, so you extract them into dnSpy's `bin` folder and end up with:
+  - `bin/Extensions/dnSpy.MCP.Server/*`
+- this keeps future upgrades isolated to a single extension directory instead of scattering MCP files across the dnSpy bin root
+
+---
+
 ## v1.8.21 — 2026-04-07
 
 ### Changed: back to the upstream source-first baseline

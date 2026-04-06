@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.22] - 2026-04-07
+
+### Changed
+- The extension now builds into dnSpy's extension-style layout instead of the flat bin root:
+  - `dnSpy/dnSpy/bin/Release/net10.0-windows/Extensions/dnSpy.MCP.Server/`
+  - `dnSpy/dnSpy/bin/Release/net48/Extensions/dnSpy.MCP.Server/`
+- GitHub Actions build/release artifacts now ship the same layout, so extracting the zip into dnSpy's `bin` directory produces `bin/Extensions/dnSpy.MCP.Server/*`.
+- README / release notes now document the extension-folder deployment path as the primary update flow for prebuilt hosts.
+
 ## [1.8.21] - 2026-04-07
 
 ### Changed

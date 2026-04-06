@@ -4,13 +4,14 @@
 
   <PropertyGroup>
     <AssemblyName>dnSpy.MCP.Server.x</AssemblyName>
-    <Version>1.8.21</Version>
-    <AssemblyVersion>1.8.21.0</AssemblyVersion>
-    <FileVersion>1.8.21.0</FileVersion>
-    <InformationalVersion>1.8.21</InformationalVersion>
+    <Version>1.8.22</Version>
+    <AssemblyVersion>1.8.22.0</AssemblyVersion>
+    <FileVersion>1.8.22.0</FileVersion>
+    <InformationalVersion>1.8.22</InformationalVersion>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>..\..\dnSpy.snk</AssemblyOriginatorKeyFile>
-    <OutputPath>..\..\dnSpy\dnSpy\bin\$(Configuration)\</OutputPath>
+    <OutputPath>..\..\dnSpy\dnSpy\bin\$(Configuration)\$(TargetFramework)\Extensions\dnSpy.MCP.Server\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <!-- CS8002 comes from local Echo project references that are not strong-named. -->

@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.21 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.22 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -145,11 +145,12 @@ dotnet clean Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj
 
 | Target | Output path |
 |--------|-------------|
-| .NET 10.0-windows | `dnSpy/dnSpy/bin/Release/net10.0-windows/dnSpy.MCP.Server.x.dll` |
-| .NET Framework 4.8 | `dnSpy/dnSpy/bin/Release/net48/dnSpy.MCP.Server.x.dll` |
+| .NET 10.0-windows | `dnSpy/dnSpy/bin/Release/net10.0-windows/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.x.dll` |
+| .NET Framework 4.8 | `dnSpy/dnSpy/bin/Release/net48/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.x.dll` |
 
-> The MCP Server DLL is output directly into dnSpy's bin directory so it loads automatically when you start dnSpy.
-> GitHub Actions release/build artifacts are packaged as a **plugin-only bundle**: copy the zip contents into dnSpy's `bin` directory, but **do not** replace the whole dnSpy folder or overwrite `dnSpy.exe.config`.
+> The MCP Server now builds straight into dnSpy's extension layout: `bin/Extensions/dnSpy.MCP.Server`.
+> GitHub Actions release/build artifacts are packaged in the same structure, so you extract the zip into dnSpy's `bin` directory and get `bin/Extensions/dnSpy.MCP.Server/*`.
+> Do **not** replace the whole dnSpy folder or overwrite `dnSpy.exe.config`.
 
 ### Verify the build
 
@@ -180,6 +181,15 @@ For the compatibility line:
 ```bash
 dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net48
 ```
+
+For a prebuilt dnSpy package, the release-aligned deployment flow is:
+
+1. download the matching `dnSpy.MCP.Server-<target>.zip`
+2. open your dnSpy install's `bin` directory
+3. extract the zip there
+4. verify the result is `bin/Extensions/dnSpy.MCP.Server/`
+
+That keeps updates isolated to one extension directory instead of mixing MCP files into the dnSpy root.
 
 If you instead deploy into an **official prebuilt** dnSpy zip, treat that as a separate release-aligned path and verify the host runtime/dependency baseline before assuming it matches the current source branch.
 
@@ -1245,7 +1255,7 @@ netstat -ano | findstr :3100
 
 | Symptom | Likely cause | Solution |
 |---------|-------------|----------|
-| Extension not loading | DLL not in dnSpy bin folder | Rebuild with `-c Release`; check output path in `.csproj` |
+| Extension not loading | MCP files not under `bin/Extensions/dnSpy.MCP.Server` | Rebuild with `-c Release`; check output path in `.csproj` and the extracted zip layout |
 | `Connection refused` on port 3100 | Server failed to start | Check dnSpy's log window; port 3100 may be in use — `netstat -ano \| findstr :3100` |
 | Tool returns `Unknown tool: …` | Name typo or outdated client cache | Call `list_tools` to see the current tool list |
 | `Assembly not found` | Name mismatch | Call `list_assemblies` and use the exact `Name` value shown |
@@ -1257,7 +1267,7 @@ netstat -ano | findstr :3100
 | `unpack_from_memory` fails with anti-debug error | Process kills itself before EntryPoint | Use `patch_method_to_ret` to neutralize anti-debug methods first, save the patched binary, then retry |
 | `Failed to connect` when adding MCP server | Wrong transport type or endpoint | Use the streamable HTTP endpoint `http://127.0.0.1:3100/mcp` and ensure the client is configured for HTTP/streamable HTTP, not SSE |
 | `Could not load file or assembly 'System.Text.Json'` / `System.Collections.Immutable` / `System.Memory` | net48 plugin copied into a dnSpy install whose `*.config` redirects are too old | Redeploy from a clean dnSpy tree and add the binding redirects shown in **Manual net48 dependency repair** above |
-| dnSpy still loads an old MCP build after redeploy | Multiple dnSpy folders or stale copied plugin files | Search for every `dnSpy.MCP.Server.x.dll`, delete old copies, and redeploy only the current plugin-only bundle into a fresh local install |
+| dnSpy still loads an old MCP build after redeploy | Multiple dnSpy folders or stale copied plugin files | Search for every `dnSpy.MCP.Server.x.dll`, delete old copies, and redeploy only the current `bin/Extensions/dnSpy.MCP.Server` bundle into a fresh local install |
 | `dump_cordbg_il` returns E_NOINTERFACE errors | COM STA apartment threading | `ICorDebugModule` COM objects belong to the CorDebug engine thread; calling from another STA fails. This is a known limitation — use `dump_module_unpacked` instead for memory dumps. |
 | `Connection refused` from VM / sandbox | `host` is still `"localhost"` | Set `"host": "0.0.0.0"` in `mcp-config.json` and run `netsh http add urlacl url=http://+:3100/ user=Everyone` as Administrator. |
 | `Access denied` when binding to `0.0.0.0` | Missing URL ACL | Run `netsh http add urlacl url=http://+:3100/ user=Everyone` as Administrator (replace `3100` with your configured port). |

@@ -98,6 +98,8 @@ jobs:
 
           $artifactDir = Join-Path $PWD "release-assets/${{ matrix.target_framework }}"
           New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+          $pluginDir = Join-Path $artifactDir 'Extensions/dnSpy.MCP.Server'
+          New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
 
           # --- Collect MCP extension files from the build output directory ---
           $includePatterns = @(
@@ -113,13 +115,13 @@ jobs:
 
           foreach ($pattern in $includePatterns) {
             Get-ChildItem -Path $buildOutDir -Filter $pattern -File -ErrorAction SilentlyContinue |
-              Copy-Item -Destination $artifactDir -Force
+              Copy-Item -Destination $pluginDir -Force
           }
 
           # --- Collect stdio-proxy files ---
           $proxyOutDir = Join-Path $PWD "pack-out/${{ matrix.target_framework }}/stdio-proxy"
           if (Test-Path $proxyOutDir) {
-            $proxyArtifactDir = Join-Path $artifactDir 'stdio-proxy'
+            $proxyArtifactDir = Join-Path $pluginDir 'stdio-proxy'
             New-Item -ItemType Directory -Force -Path $proxyArtifactDir | Out-Null
             $proxyPatterns = @(
               'dnSpy.MCP.StdioProxy.exe',
@@ -135,11 +137,12 @@ jobs:
           }
 
           @"
-          Copy these files into dnSpy's bin folder.
+          Extract this zip into dnSpy's bin folder.
+          Resulting layout: bin/Extensions/dnSpy.MCP.Server/*
           Preferred host package for this artifact: ${{ matrix.host_package }} (${{ matrix.host_line }} line).
           This package intentionally excludes dnSpy host binaries and broad transitive dependencies.
           Do not overwrite dnSpy.exe.config or replace the whole dnSpy directory with this zip.
-          Optional stdio bridge is under stdio-proxy/ and forwards stdio MCP traffic to the local HTTP endpoint.
+          Optional stdio bridge is under Extensions/dnSpy.MCP.Server/stdio-proxy/ and forwards stdio MCP traffic to the local HTTP endpoint.
           "@ | Set-Content -Path (Join-Path $artifactDir 'INSTALL.txt') -Encoding UTF8
 
           $zipPath = Join-Path $PWD "release-assets/dnSpy.MCP.Server-${{ matrix.target_framework }}.zip"
