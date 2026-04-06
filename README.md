@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.19 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.20 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -108,7 +108,7 @@ The MCP server does **not** port HoLLy UI, MSAGL, AsmResolver backends, or symbo
 | dnSpy host package | Plugin target | Status | Notes |
 |---|---:|---|---|
 | `dnSpy-net-win64.zip` | `net10.0-windows` | **Primary / recommended** | Mainline path for modern 64-bit Windows installs. This is the default line we optimize for first. |
-| `dnSpy-netframework.zip` | `net48` | Compatibility | Kept for older / legacy host deployments. Must stay aligned with dnSpyEx `v6.5.1` and its `dnlib 4.4.0`. |
+| `dnSpy-netframework.zip` | `net48` | Compatibility | Kept for older / legacy host deployments. Must stay aligned with dnSpyEx `v6.5.1` and its `dnlib 4.4.0`. Compatibility builds are best-effort and no longer block the primary win64 release path. |
 | `dnSpy-net-win32.zip` | not primary in this repo | Legacy x86 host | Not the default path for this project. Use only if you explicitly need a 32-bit host. |
 
 ### Clone & Restore

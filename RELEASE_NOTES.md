@@ -2,6 +2,15 @@
 
 ---
 
+## v1.8.20 — 2026-04-07
+
+### Changed: primary win64 release is no longer blocked by net48
+
+- GitHub Actions now treats the `net48` line as best-effort compatibility
+- the primary `dnSpy-net-win64.zip` / `net10.0-windows` release path can now succeed even if the `net48` packaging job still fails
+
+---
+
 ## v1.8.19 — 2026-04-07
 
 ### Changed: win64 / net10 is now the primary host line

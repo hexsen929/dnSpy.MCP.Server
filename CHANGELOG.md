@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.20] - 2026-04-07
+
+### Changed
+- The `dnSpy-net-win64.zip` / `net10.0-windows` path is now allowed to release independently of `net48` compatibility failures in GitHub Actions.
+- `net48` remains in CI as a compatibility line, but its job is marked best-effort so it no longer blocks the primary win64 artifact.
+
 ## [1.8.19] - 2026-04-07
 
 ### Changed
