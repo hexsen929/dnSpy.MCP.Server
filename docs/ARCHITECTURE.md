@@ -544,6 +544,6 @@ dnSpy.MCP.Server/
 ---
 
 ## Document Version
-- **Version**: 1.8.4
+- **Version**: 1.8.5
 - **Updated**: 2026-04-06
-- **Status**: Architecture documented for v1.8.4 — 143 tools
+- **Status**: Architecture documented for v1.8.5 — 143 tools
