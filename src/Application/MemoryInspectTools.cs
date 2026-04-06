@@ -109,7 +109,7 @@ namespace dnSpy.MCP.Server.Application {
 				try {
 					context = language.CreateContext(runtime, frame.Location,
 						DbgEvaluationContextOptions.None,
-						TimeSpan.FromSeconds(3));
+						TimeSpan.FromSeconds(3d));
 
 					var evalInfo = new DbgEvaluationInfo(context, frame);
 
@@ -253,7 +253,7 @@ namespace dnSpy.MCP.Server.Application {
 			try {
 				context = language.CreateContext(runtime, frame.Location,
 					DbgEvaluationContextOptions.None,
-					TimeSpan.FromSeconds(funcEvalTimeout));
+					TimeSpan.FromSeconds((double)funcEvalTimeout));
 
 				var evalInfo = new DbgEvaluationInfo(context, frame);
 

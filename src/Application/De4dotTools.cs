@@ -282,7 +282,7 @@ namespace dnSpy.MCP.Server.Application
                 var deob = obfFile.Deobfuscator;
                 string detectedName = deob.TypeLong;
 
-                using var deobfCts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                using var deobfCts = new CancellationTokenSource(TimeSpan.FromSeconds((double)timeoutSeconds));
                 var deobfTask = Task.Run(() =>
                 {
                     obfFile.DeobfuscateBegin();
@@ -292,7 +292,7 @@ namespace dnSpy.MCP.Server.Application
                     obfFile.Save();
                 }, deobfCts.Token);
 
-                if (!deobfTask.Wait(TimeSpan.FromSeconds(timeoutSeconds)))
+                if (!deobfTask.Wait(TimeSpan.FromSeconds((double)timeoutSeconds)))
                 {
                     deobfCts.Cancel();
                     throw new TimeoutException($"deobfuscate_assembly timed out after {timeoutSeconds}s");

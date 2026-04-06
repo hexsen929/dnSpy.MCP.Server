@@ -96,7 +96,7 @@ namespace dnSpy.MCP.Server.Application
             var opts = BuildScriptOptions();
 
             var sb = globals.Output;
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            var cts = new CancellationTokenSource(TimeSpan.FromSeconds((double)timeoutSeconds));
 
             try
             {

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.24] - 2026-04-07
+
+### Fixed
+- Realigned the official build/release line with `dnSpyEx/dnSpy@v6.5.1`, so the win64 package now targets `net8.0-windows` instead of the experimental `net10.0-windows` host baseline.
+- Replaced the hard-coded server version constant with runtime assembly metadata resolution, so `serverInfo.version`, logs, and UI no longer drift from the actual built package version.
+- Forced timeout code paths to use the established `TimeSpan.FromSeconds(double)` overloads, avoiding the `TimeSpan.FromSeconds(Int64)` runtime failure seen on the official .NET 8 win64 host.
+- Reworked the `load_assembly` runtime-owner check to avoid the newer `Contains(..., IEqualityComparer<T>)` path that broke on the official win64 line.
+- Updated the stdio proxy assembly version to match the plugin package version.
+
+### Changed
+- GitHub Actions now builds both release artifacts against `dnSpyEx/dnSpy@v6.5.1`:
+  - `net8.0-windows` for `dnSpy-net-win64`
+  - `net48` for `dnSpy-netframework`
+- CI packaging now prefers the target-specific extension output directory before falling back to a wider search, reducing the chance of cross-target asset mixing.
+- `run_script` now compiles against `$(RoslynVersion)` from the host source tree instead of a pinned Roslyn 5.0 package, keeping the scripting API aligned with the actual dnSpy host baseline.
+
 ## [1.8.23] - 2026-04-07
 
 ### Added

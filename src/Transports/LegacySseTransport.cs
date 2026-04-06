@@ -124,7 +124,7 @@ namespace dnSpy.MCP.Server.Transports {
 		async Task RunHeartbeatLoopAsync(SseConnection connection, CancellationToken cancellationToken) {
 			try {
 				while (!cancellationToken.IsCancellationRequested && !connection.IsClosed) {
-					await Task.Delay(TimeSpan.FromSeconds(15), cancellationToken).ConfigureAwait(false);
+					await Task.Delay(TimeSpan.FromSeconds(15d), cancellationToken).ConfigureAwait(false);
 					if (connection.IsClosed)
 						break;
 					await connection.SendCommentAsync("heartbeat", cancellationToken).ConfigureAwait(false);

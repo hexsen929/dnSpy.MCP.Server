@@ -13,13 +13,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target_framework: net10.0-windows
-            dnspy_ref: master
-            host_package: source-built dnSpyEx master host
+          - target_framework: net8.0-windows
+            dnspy_ref: v6.5.1
+            host_package: dnSpyEx v6.5.1 / official dnSpy-net-win64 host
             host_line: primary
           - target_framework: net48
-            dnspy_ref: master
-            host_package: source-built dnSpyEx master host
+            dnspy_ref: v6.5.1
+            host_package: dnSpyEx v6.5.1 / official dnSpy-netframework host
             host_line: compatibility
 
     steps:
@@ -48,7 +48,6 @@ jobs:
         with:
           dotnet-version: |
             8.0.x
-            10.0.x
 
       - name: Overlay forked extension into dnSpy source tree
         shell: pwsh
@@ -83,11 +82,22 @@ jobs:
       - name: Package release artifact
         shell: pwsh
         run: |
-          # --- Locate the MCP DLL from wherever MSBuild actually placed it ---
-          $dll = Get-ChildItem 'dnspy-src' -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.FullName -notmatch '[\\/]obj[\\/]' } |
-            Sort-Object LastWriteTimeUtc -Descending |
-            Select-Object -First 1
+          $preferredBuildOutDir = Join-Path $PWD "dnspy-src/dnSpy/dnSpy/bin/Release/${{ matrix.target_framework }}/Extensions/dnSpy.MCP.Server"
+          if (Test-Path $preferredBuildOutDir) {
+            $dll = Get-ChildItem -Path $preferredBuildOutDir -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+          }
+
+          if (-not $dll) {
+            # --- Fallback: locate the MCP DLL from wherever MSBuild actually placed it ---
+            $dll = Get-ChildItem 'dnspy-src' -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.FullName -notmatch '[\\/]obj[\\/]' -and
+                $_.FullName -match [regex]::Escape("${{ matrix.target_framework }}")
+              } |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 1
+          }
 
           if (-not $dll) {
             throw "dnSpy.MCP.Server.x.dll for target ${{ matrix.target_framework }} was not found."

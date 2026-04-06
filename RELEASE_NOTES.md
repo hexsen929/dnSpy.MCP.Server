@@ -2,6 +2,24 @@
 
 ---
 
+## v1.8.24 — 2026-04-07
+
+### Fixed: official win64 line is back on .NET 8
+
+- release/build now target the official `dnSpyEx/dnSpy@v6.5.1` baseline again
+- the primary win64 package is now `net8.0-windows`, matching `dnSpy-net-win64`
+- the compatibility package remains `net48`, matching `dnSpy-netframework`
+
+### Fixed: runtime compatibility regressions
+
+- removed the hard-coded server version drift by resolving the displayed version from assembly metadata
+- changed timeout code paths to use the classic `TimeSpan.FromSeconds(double)` overloads, fixing the `FromSeconds(Int64)` failure on the official win64 host
+- changed the `load_assembly` runtime-owner lookup to avoid the newer `Contains(..., IEqualityComparer<T>)` path that was failing on the win64 host
+- aligned `run_script` with the host Roslyn version via `$(RoslynVersion)` instead of a fixed `5.0.0` package reference
+- stdio proxy version metadata now matches the plugin package version
+
+---
+
 ## v1.8.23 — 2026-04-07
 
 ### Added: config-driven tool policy control
@@ -586,4 +604,4 @@ Four tools that existed in the codebase but lacked MCP schemas and dispatch entr
 | IL | `get_method_il`, `get_method_il_bytes`, `get_method_exception_handlers` |
 | Utility | `list_tools` |
 
-**Protocol**: MCP 2024-11-05 | **Transport**: HTTP/SSE | **Targets**: net48 + net10.0-windows
+**Protocol**: MCP 2024-11-05 | **Transport**: HTTP/SSE | **Targets**: net48 + net8.0-windows

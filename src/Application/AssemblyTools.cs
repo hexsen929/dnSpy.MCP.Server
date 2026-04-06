@@ -537,7 +537,7 @@ namespace dnSpy.MCP.Server.Application
             // Find runtime that owns this module
             DbgRuntime? owningRuntime = null;
             foreach (var rt in process.Runtimes) {
-                if (rt.Modules.Contains(target)) { owningRuntime = rt; break; }
+                if (rt.Modules.Any(module => ReferenceEquals(module, target))) { owningRuntime = rt; break; }
             }
 
             if (owningRuntime?.InternalRuntime is IDbgDotNetRuntime dnRuntime) {
