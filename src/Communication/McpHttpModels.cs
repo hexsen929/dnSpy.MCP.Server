@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 
 namespace dnSpy.MCP.Server.Communication {
-	sealed class McpHttpRequestData {
+	public sealed class McpHttpRequestData {
 		public string Method { get; set; } = "GET";
 		public string Path { get; set; } = "/";
 		public string Body { get; set; } = string.Empty;
@@ -15,7 +15,7 @@ namespace dnSpy.MCP.Server.Communication {
 		}
 	}
 
-	sealed class McpHttpResponseData {
+	public sealed class McpHttpResponseData {
 		public int StatusCode { get; set; }
 		public string ContentType { get; set; } = "application/octet-stream";
 		public Encoding ContentEncoding { get; set; } = Encoding.UTF8;
