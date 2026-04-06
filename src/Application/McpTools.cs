@@ -53,6 +53,7 @@ namespace dnSpy.MCP.Server.Application
         readonly Lazy<NativeRuntimeTools> nativeRuntimeTools;
         readonly Lazy<InterceptionTools> interceptionTools;
         readonly Lazy<AgentCompatibilityTools> agentCompatibilityTools;
+        readonly Lazy<MalwareAnalysisTools> malwareAnalysisTools;
 
         [ImportingConstructor]
         public McpTools(
@@ -74,7 +75,8 @@ namespace dnSpy.MCP.Server.Application
             Lazy<SourceMapTools> sourceMapTools,
             Lazy<NativeRuntimeTools> nativeRuntimeTools,
             Lazy<InterceptionTools> interceptionTools,
-            Lazy<AgentCompatibilityTools> agentCompatibilityTools
+            Lazy<AgentCompatibilityTools> agentCompatibilityTools,
+            Lazy<MalwareAnalysisTools> malwareAnalysisTools
             )
         {
             this.assemblyTools = assemblyTools;
@@ -96,6 +98,7 @@ namespace dnSpy.MCP.Server.Application
             this.nativeRuntimeTools = nativeRuntimeTools;
             this.interceptionTools = interceptionTools;
             this.agentCompatibilityTools = agentCompatibilityTools;
+            this.malwareAnalysisTools = malwareAnalysisTools;
         }
 
         // GetAvailableTools() is defined in McpTools.Schemas.cs (partial class)
@@ -191,6 +194,15 @@ namespace dnSpy.MCP.Server.Application
                     "find_dead_code"                        => InvokeLazy(codeAnalysisTools, "FindDeadCodeArgs",                        arguments),
                     "get_control_flow_graph"                => InvokeLazy(controlFlowTools, "GetControlFlowGraph",                     arguments),
                     "get_basic_blocks"                      => InvokeLazy(controlFlowTools, "GetBasicBlocks",                          arguments),
+
+                    // Malware / protection triage tools
+                    "triage_sample" => InvokeLazy(malwareAnalysisTools, "TriageSample", arguments),
+                    "get_strings" => InvokeLazy(malwareAnalysisTools, "GetStrings", arguments),
+                    "search_il_pattern" => InvokeLazy(malwareAnalysisTools, "SearchIlPattern", arguments),
+                    "analyze_static_constructors" => InvokeLazy(malwareAnalysisTools, "AnalyzeStaticConstructors", arguments),
+                    "detect_string_encryption" => InvokeLazy(malwareAnalysisTools, "DetectStringEncryption", arguments),
+                    "find_byte_arrays" => InvokeLazy(malwareAnalysisTools, "FindByteArrays", arguments),
+                    "find_embedded_pes" => InvokeLazy(malwareAnalysisTools, "FindEmbeddedPes", arguments),
 
                     // PE / string scanning tools
                     "scan_pe_strings" => InvokeLazy(assemblyTools, "ScanPeStrings", arguments),

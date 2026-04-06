@@ -40,6 +40,7 @@ namespace dnSpy.MCP.Server.Application
             AddToolRange(tools, GetMethodILToolSchemas(), "core-analysis");
             AddToolRange(tools, GetAnalysisToolSchemas(), "core-analysis");
             AddToolRange(tools, GetControlFlowToolSchemas(), "core-analysis");
+            AddToolRange(tools, GetMalwareAnalysisToolSchemas(), "security-analysis");
             AddToolRange(tools, GetEditToolSchemas(), "editing");
             AddToolRange(tools, GetResourceToolSchemas(), "editing");
             AddToolRange(tools, GetDebugToolSchemas(), "debug-runtime");
@@ -652,6 +653,108 @@ namespace dnSpy.MCP.Server.Application
                         }
                     },
                     ["required"] = new List<string> { "assembly_name", "type_full_name", "method_name" }
+                }
+            }
+        };
+
+        // ── Malware / protection triage tools ────────────────────────────────────
+        List<ToolInfo> GetMalwareAnalysisToolSchemas() => new List<ToolInfo> {
+            new ToolInfo {
+                Name = "triage_sample",
+                Description = "High-level malware / protected-sample triage: suspicious strings, P/Invokes, suspicious API usage, static constructors, decryptor candidates, embedded PE payloads, and high-entropy resources.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name to triage" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_strings"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Max suspicious strings to return (default 25)" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "get_strings",
+                Description = "Collect useful managed strings from literal fields and IL ldstr instructions, grouped by value with occurrence locations.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["min_length"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Minimum string length (default 4)" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum unique strings to return (default 500)" },
+                        ["filter_pattern"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional regex filter applied to extracted string values" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "search_il_pattern",
+                Description = "Search IL text or opcode sequences across all methods in a loaded assembly. Supports regex line matching or exact opcode-sequence scanning.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["pattern"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Substring or regex searched against textual IL lines" },
+                        ["opcode_sequence"] = new Dictionary<string, object> { ["type"] = "array", ["description"] = "Optional exact opcode sequence to match (e.g. [\"ldstr\",\"call\",\"stsfld\"])" },
+                        ["use_regex"] = new Dictionary<string, object> { ["type"] = "boolean", ["description"] = "Interpret pattern as regex (default false)" },
+                        ["type_pattern"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional regex filter for declaring type full names" },
+                        ["method_pattern"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional regex filter for method names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum matches to return (default 200)" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "analyze_static_constructors",
+                Description = "Enumerate type static constructors (.cctor) and summarize strings, calls, field writes, and suspicious indicators often used in loader/bootstrap code.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum static constructor summaries to return (default 100)" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "detect_string_encryption",
+                Description = "Heuristically rank methods that look like string decryptors/decoders based on signatures, loops, array processing, and encoding/base64 APIs.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum decryptor candidates to return (default 50)" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "find_byte_arrays",
+                Description = "Find byte-array initializers via field RVA data or method-level byte[] construction patterns, useful for payloads, keys, and encrypted blobs.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum entries to return (default 200)" }
+                    },
+                    ["required"] = new List<string>()
+                }
+            },
+            new ToolInfo {
+                Name = "find_embedded_pes",
+                Description = "Detect PE payloads embedded inside ManifestResource blobs or field RVA data by checking for MZ headers and DOS stub markers.",
+                InputSchema = new Dictionary<string, object> {
+                    ["type"] = "object",
+                    ["properties"] = new Dictionary<string, object> {
+                        ["assembly_name"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Loaded assembly name" },
+                        ["file_path"] = new Dictionary<string, object> { ["type"] = "string", ["description"] = "Optional loaded file path to disambiguate duplicate assembly names" },
+                        ["max_results"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Maximum entries to return (default 100)" }
+                    },
+                    ["required"] = new List<string>()
                 }
             }
         };
@@ -2108,6 +2211,27 @@ namespace dnSpy.MCP.Server.Application
                 break;
             case "update_method_sourcecode":
                 metadata.Notes = "Direct source-body patch workflow. The generated wrapper includes same-type member skeletons so patches can reference more fields, properties, events, and helper methods directly.";
+                break;
+            case "triage_sample":
+                metadata.Notes = "Best first-call summary for suspicious assemblies. Aggregates strings, suspicious APIs, static constructors, embedded payloads, and decryptor candidates into one report.";
+                break;
+            case "get_strings":
+                metadata.Notes = "Managed string extraction focused on literals and ldstr sites, not raw PE carving. Prefer scan_pe_strings when you want plaintext bytes from the on-disk image.";
+                break;
+            case "search_il_pattern":
+                metadata.Notes = "IL hunting helper for loaders/proxies/decryptors. Use opcode_sequence for exact instruction chains or pattern/use_regex for textual line matching.";
+                break;
+            case "analyze_static_constructors":
+                metadata.Notes = "Bootstrap analysis helper. Focuses on .cctor methods where malware commonly stages resources, keys, and loader setup.";
+                break;
+            case "detect_string_encryption":
+                metadata.Notes = "Heuristic ranking only. Use this to shortlist likely decryptors before deeper decompilation or patching.";
+                break;
+            case "find_byte_arrays":
+                metadata.Notes = "Payload/key discovery helper. Highlights field RVA blobs and byte[] construction sites that may hide encrypted payloads or configuration.";
+                break;
+            case "find_embedded_pes":
+                metadata.Notes = "Looks for PE headers inside resources or field data. Useful for second-stage payload extraction and packer triage.";
                 break;
             case "list_tools":
                 metadata.Notes = "Default mode hides tools marked hidden_by_default. Use mode='full' or include_hidden=true for the complete catalog.";

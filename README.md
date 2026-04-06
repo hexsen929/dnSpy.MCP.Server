@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.1 | **Tools**: 130+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: main branch (post-v1.8.1) | **Tools**: 140+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -26,6 +26,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
    - [Runtime Reversing Tools](#runtime-reversing-tools)
    - [Memory Dump & PE Tools](#memory-dump--pe-tools)
    - [Static PE Analysis](#static-pe-analysis)
+   - [Protection / Malware Analysis Tools](#protection--malware-analysis-tools)
    - [Deobfuscation Tools](#deobfuscation-tools)
    - [Window / Dialog Tools](#window--dialog-tools)
    - [Utility](#utility)
@@ -51,6 +52,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
 - AgentSmithers-style direct editing was added via `get_class_sourcecode`, `get_method_sourcecode`, `get_function_opcodes`, `set_function_opcodes`, `overwrite_full_function_opcodes`, and `update_method_sourcecode`
 - `set_function_opcodes` now supports branch and `switch` targets that point at newly inserted labels or surviving original instructions (`line:<index>` / `IL_<offset>`)
 - `update_method_sourcecode` now compiles replacement method bodies inside a generated wrapper that includes same-type member stubs, so patches can reference more fields, properties, events, and helper methods directly
+- first-pass protection / malware triage tools were added via `triage_sample`, `get_strings`, `search_il_pattern`, `analyze_static_constructors`, `detect_string_encryption`, `find_byte_arrays`, and `find_embedded_pes`
 - GitHub Actions build/release artifacts are now shipped as **plugin-only bundles** for safer Windows deployment
 - tool discoverability now includes catalog metadata such as `category`, `hidden_by_default`, `is_legacy`, `preferred_replacement`, and `notes`
 
@@ -71,6 +73,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedd
 | **Runtime Reversing** | Resolve exports, disassemble native functions with Iced, patch/revert exports, inspect PEB, suspend/resume threads, inject native/managed DLLs |
 | **Memory Dump** | List runtime modules, dump .NET or native modules from memory, read/write process memory, extract PE sections |
 | **Static PE Analysis** | Scan raw PE bytes for strings; all-in-one ConfuserEx unpacker |
+| **Protection / Malware Analysis** | Triage suspicious assemblies, extract managed strings, search IL patterns, inspect static constructors, rank likely string decryptors, find byte-array payloads, detect embedded PE blobs |
 | **Deobfuscation** | de4dot integration: detect obfuscator, rename mangled symbols, decrypt strings. Both in-process (`deobfuscate_assembly`) and external process (`run_de4dot`) modes available in all builds |
 | **Window / Dialog** | List active dialog/message-box windows (Win32 `#32770` + WPF) in the dnSpy process; dismiss them by clicking any button by name (supports EN and ES) |
 | **Search** | Glob and regex search across all loaded assemblies |
@@ -730,6 +733,45 @@ Tools that operate on raw PE file bytes — no debug session required.
 
 ---
 
+### Protection / Malware Analysis Tools
+
+Static-first triage helpers focused on suspicious managed loaders, protected samples, and payload staging patterns. These tools do **not** execute the target assembly.
+
+| Tool | Description | Required params | Optional params |
+|------|-------------|-----------------|-----------------|
+| `triage_sample` | High-level triage report combining suspicious strings, P/Invokes, suspicious API usage, static constructors, decryptor candidates, embedded PE payloads, and high-entropy resources | `assembly_name` or `file_path` | `max_strings` |
+| `get_strings` | Extract useful managed strings from literal fields and `ldstr` sites, grouped by value with occurrence locations | `assembly_name` or `file_path` | `min_length`, `max_results`, `filter_pattern` |
+| `search_il_pattern` | Search IL text or exact opcode sequences across all methods in a loaded assembly | `assembly_name` or `file_path` plus `pattern` or `opcode_sequence` | `use_regex`, `type_pattern`, `method_pattern`, `max_results` |
+| `analyze_static_constructors` | Summarize type static constructors (`.cctor`) with strings, calls, field writes, and suspicious indicators common in bootstrap code | `assembly_name` or `file_path` | `max_results` |
+| `detect_string_encryption` | Heuristically rank methods that look like string decryptors/decoders | `assembly_name` or `file_path` | `max_results` |
+| `find_byte_arrays` | Find field RVA blobs and method-level byte-array construction sites that may hide payloads, keys, or encrypted configuration | `assembly_name` or `file_path` | `max_results` |
+| `find_embedded_pes` | Detect PE payloads embedded in ManifestResource blobs or field data by looking for `MZ` headers and DOS stub markers | `assembly_name` or `file_path` | `max_results` |
+
+#### Parameter details
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `file_path` | string | Optional path of a **loaded** assembly used to disambiguate duplicate assembly names |
+| `max_strings` | integer | (`triage_sample`) Max suspicious strings to include in the summary (default `25`) |
+| `min_length` | integer | (`get_strings`) Minimum extracted string length (default `4`) |
+| `max_results` | integer | Max returned matches/candidates/entries depending on tool |
+| `filter_pattern` | string | (`get_strings`) Regex applied to extracted values |
+| `pattern` | string | (`search_il_pattern`) Substring or regex matched against textual IL lines |
+| `opcode_sequence` | array of strings | (`search_il_pattern`) Exact opcode chain such as `["ldstr", "call", "stsfld"]` |
+| `use_regex` | boolean | (`search_il_pattern`) Treat `pattern` as regex |
+| `type_pattern` | string | (`search_il_pattern`) Regex filter for declaring type full names |
+| `method_pattern` | string | (`search_il_pattern`) Regex filter for method names |
+
+#### Notes
+
+- `triage_sample` is the best first call when you open an unknown suspicious assembly in dnSpy
+- `get_strings` focuses on **managed literals and `ldstr` sites**, not raw file carving — use `scan_pe_strings` when you need on-disk plaintext extraction
+- `analyze_static_constructors` is especially useful for loaders that stage config, resources, byte arrays, or bootstrap hooks in `.cctor`
+- `detect_string_encryption` is heuristic ranking only; use it to shortlist methods before manual decompilation or patching
+- `find_embedded_pes` complements `list_resources` / `get_resource` by pointing directly at likely second-stage payload carriers
+
+---
+
 ### Deobfuscation Tools
 
 Two de4dot integration modes: **in-process** (`deobfuscate_assembly` — uses bundled de4dot libraries, available in all builds) and **external process** (`run_de4dot` — spawns `de4dot.exe`, supports dynamic string decryption, available in all builds).
@@ -1044,6 +1086,7 @@ dnSpy.MCP.Server/
     │   ├── MemoryInspectTools.cs    # Local variable inspection
     │   ├── UsageFindingCommandTools.cs  # IL usage analysis
     │   ├── CodeAnalysisHelpers.cs   # Call-graph & dependency analysis
+    │   ├── MalwareAnalysisTools.cs  # Triage, strings, IL pattern, payload heuristics
     │   ├── De4dotTools.cs           # de4dot deobfuscation (all builds)
     │   ├── SourceMapTools.cs        # HoLLy-style non-UI SourceMap support
     │   ├── NativeRuntimeTools.cs    # Native reversing, export patching, DLL injection

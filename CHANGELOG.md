@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Protection / malware triage tools** (7 tools — `MalwareAnalysisTools.cs`):
+  - `triage_sample` — one-call suspicious assembly triage
+  - `get_strings` — managed string extraction from field constants and `ldstr` sites
+  - `search_il_pattern` — IL text / opcode-sequence hunting across methods
+  - `analyze_static_constructors` — `.cctor` bootstrap analysis
+  - `detect_string_encryption` — heuristic string-decryptor ranking
+  - `find_byte_arrays` — byte-array/payload/key staging discovery
+  - `find_embedded_pes` — embedded PE blob detection in resources and field data
+
+### Documentation
+- README now documents the new protection / malware analysis tool group and updates the tool count to 140+ on the main branch.
+- Architecture docs now include `MalwareAnalysisTools` and the expanded command surface.
+
+---
+
 ## [1.8.1] - 2026-04-05
 
 ### Added

@@ -31,7 +31,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 **Structure**: Split into two files via C# `partial class`
 
 #### **McpTools.cs** — Dispatch & Helpers
-- `ExecuteTool(toolName, arguments)` — Main dispatcher switch for 133 canonical tools plus legacy compatibility aliases
+- `ExecuteTool(toolName, arguments)` — Main dispatcher switch for 140 canonical tools plus legacy compatibility aliases
 - `ListTools()` — Self-discovery endpoint
 - `InvokeLazy<T>()` — Reflection-based delegation to lazy-loaded service classes
 - `FindAssemblyByName()` / `FindTypeInAssembly()` — Assembly/type lookup helpers
@@ -42,11 +42,11 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 - `GetAllTypesRecursive()` / `GetAllNestedTypesRecursive()` — IL traversal helpers
 
 #### **McpTools.Schemas.cs** — Tool Registry (partial class extension)
-- `GetAvailableTools()` — Aggregates 16 category methods into the full tool list and annotates catalog metadata
-- 16 private category methods: `GetAssemblyToolSchemas()`, `GetTypeToolSchemas()`, `GetMethodILToolSchemas()`, `GetAnalysisToolSchemas()`, `GetControlFlowToolSchemas()`, `GetEditToolSchemas()`, `GetResourceToolSchemas()`, `GetDebugToolSchemas()`, `GetMemoryToolSchemas()`, `GetDeobfuscationToolSchemas()`, `GetSkillsToolSchemas()`, `GetScriptingToolSchemas()`, `GetWindowToolSchemas()`, `GetSourceMapToolSchemas()`, `GetNativeRuntimeToolSchemas()`, `GetUtilityToolSchemas()`
+- `GetAvailableTools()` — Aggregates 17 category methods into the full tool list and annotates catalog metadata
+- 17 private category methods: `GetAssemblyToolSchemas()`, `GetTypeToolSchemas()`, `GetMethodILToolSchemas()`, `GetAnalysisToolSchemas()`, `GetControlFlowToolSchemas()`, `GetMalwareAnalysisToolSchemas()`, `GetEditToolSchemas()`, `GetResourceToolSchemas()`, `GetDebugToolSchemas()`, `GetMemoryToolSchemas()`, `GetDeobfuscationToolSchemas()`, `GetSkillsToolSchemas()`, `GetScriptingToolSchemas()`, `GetWindowToolSchemas()`, `GetSourceMapToolSchemas()`, `GetNativeRuntimeToolSchemas()`, `GetUtilityToolSchemas()`
 
-**Constructor** (MEF `[ImportingConstructor]`) injects 19 lazy services:
-`assemblyTools`, `typeTools`, `editTools`, `debugTools`, `dumpTools`, `memoryInspectTools`, `usageFindingTools`, `codeAnalysisTools`, `controlFlowTools`, `discoveryTools`, `de4dotExeTool`, `de4dotTools`, `skillsTools`, `scriptTools`, `windowTools`, `sourceMapTools`, `nativeRuntimeTools`, `interceptionTools`, `agentCompatibilityTools`.
+**Constructor** (MEF `[ImportingConstructor]`) injects 20 lazy services:
+`assemblyTools`, `typeTools`, `editTools`, `debugTools`, `dumpTools`, `memoryInspectTools`, `usageFindingTools`, `codeAnalysisTools`, `controlFlowTools`, `discoveryTools`, `de4dotExeTool`, `de4dotTools`, `skillsTools`, `scriptTools`, `windowTools`, `sourceMapTools`, `nativeRuntimeTools`, `interceptionTools`, `agentCompatibilityTools`, `malwareAnalysisTools`.
 
 ---
 
@@ -244,7 +244,20 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 17. **SourceMapTools.cs** (Lazy-Loaded)
+### 17. **MalwareAnalysisTools.cs** (Lazy-Loaded)
+**Responsibility**: Static-first protection / malware triage helpers for suspicious managed samples
+**Methods**:
+- `TriageSample()` - Aggregate suspicious strings, APIs, P/Invokes, `.cctor` activity, embedded payloads, and entropy hints
+- `GetStrings()` - Managed string extraction from field constants and `ldstr` sites
+- `SearchIlPattern()` - IL text / opcode-sequence hunting across all methods
+- `AnalyzeStaticConstructors()` - Summarise bootstrap activity in `.cctor` methods
+- `DetectStringEncryption()` - Heuristic ranking of string decryptor candidates
+- `FindByteArrays()` - Byte-array staging discovery
+- `FindEmbeddedPes()` - Detect PE payloads hidden in resources or field data
+
+---
+
+### 18. **SourceMapTools.cs** (Lazy-Loaded)
 **Responsibility**: HoLLy-style non-UI SourceMap support
 **Methods**:
 - `GetSourceMapName()` - Resolve the current SourceMap name for a type or member
@@ -254,7 +267,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 18. **NativeRuntimeTools.cs** (Lazy-Loaded)
+### 19. **NativeRuntimeTools.cs** (Lazy-Loaded)
 **Responsibility**: Native runtime inspection, export patching, thread control, and DLL injection
 **Methods**:
 - `GetProcAddress()` / `DisassembleNativeFunction()` / `ReadNativeMemory()` - Export and memory inspection
@@ -265,7 +278,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 
 ---
 
-### 19. **InterceptionTools.cs** (Lazy-Loaded)
+### 20. **InterceptionTools.cs** (Lazy-Loaded)
 **Responsibility**: Persistent managed tracing and breakpoint-backed interception
 **Methods**:
 - `TraceMethod()` - Lightweight logging-oriented tracing without changing control flow
@@ -311,7 +324,7 @@ McpServer.ProcessRequest()
 McpTools.ExecuteTool(toolName, args)
     ↓
 ┌─────────────────────────────────────────────────┐
-│ Command Routing (switch statement — 133 tools)  │
+│ Command Routing (switch statement — 140 tools)  │
 ├─────────────────────────────────────────────────┤
 │                                                 │
 ├─ Inline Helpers (McpTools.cs)                   │
@@ -329,6 +342,7 @@ McpTools.ExecuteTool(toolName, args)
 │  ├─ InvokeLazy(usageFindingCommandTools, ...)   │
 │  ├─ InvokeLazy(codeAnalysisHelpers, ...)        │
 │  ├─ InvokeLazy(controlFlowTools, ...)           │
+│  ├─ InvokeLazy(malwareAnalysisTools, ...)       │
 │  ├─ InvokeLazy(discoveryTools, ...)             │
 │  ├─ InvokeLazy(de4dotTools, ...)                │
 │  ├─ InvokeLazy(skillsTools, ...)                │
@@ -368,7 +382,8 @@ McpTools(
     Lazy<De4dotExeTool>, Lazy<De4dotTools>,
     Lazy<SkillsTools>, Lazy<ScriptTools>, Lazy<WindowTools>,
     Lazy<SourceMapTools>, Lazy<NativeRuntimeTools>,
-    Lazy<InterceptionTools>, Lazy<AgentCompatibilityTools>
+    Lazy<InterceptionTools>, Lazy<AgentCompatibilityTools>,
+    Lazy<MalwareAnalysisTools>
 )
     ↓
 McpServer(McpTools)
@@ -385,7 +400,7 @@ McpServer.Start()
 ## Key Design Patterns
 
 ### 1. **Lazy Initialization**
-Core service classes are wrapped in `Lazy<T>` to defer MEF construction until first use, reducing startup overhead and keeping startup responsive even as the tool surface grows past 130 commands.
+Core service classes are wrapped in `Lazy<T>` to defer MEF construction until first use, reducing startup overhead and keeping startup responsive even as the tool surface grows past 140 commands.
 
 ### 2. **Reflection-Based Delegation**
 `InvokeLazy<T>(lazy, methodName, arguments)` invokes a method on a lazy-loaded service by name. On `TargetInvocationException` the inner exception is logged and re-thrown, preserving the original stack trace.
@@ -393,7 +408,7 @@ Core service classes are wrapped in `Lazy<T>` to defer MEF construction until fi
 ### 3. **Partial Class Split**
 `McpTools` is split across two files:
 - `McpTools.cs` — ~370 lines: fields, constructor, `ExecuteTool()` switch, helpers
-- `McpTools.Schemas.cs` — ~2100 lines: `GetAvailableTools()` + 16 `Get*ToolSchemas()` category methods + catalog metadata annotations
+- `McpTools.Schemas.cs` — ~2200 lines: `GetAvailableTools()` + 17 `Get*ToolSchemas()` category methods + catalog metadata annotations
 
 This keeps the dispatch logic and schema declarations independently editable.
 
@@ -420,6 +435,7 @@ Usage-finding commands use dnlib IL traversal to identify:
 | Method / IL | `decompile_method`, `get_method_il`, `get_method_il_bytes`, `get_method_exception_handlers`, `dump_cordbg_il` | 5 | ✅ |
 | Analysis | `find_who_calls_method`, `find_who_uses_type`, `find_who_reads_field`, `find_who_writes_field`, `analyze_type_inheritance`, `analyze_call_graph`, `find_dependency_chain`, `find_dead_code` | 9 | ✅ |
 | Control Flow | `get_control_flow_graph`, `get_basic_blocks` | 2 | ✅ |
+| Protection / Malware | `triage_sample`, `get_strings`, `search_il_pattern`, `analyze_static_constructors`, `detect_string_encryption`, `find_byte_arrays`, `find_embedded_pes` | 7 | ✅ |
 | Edit | `change_member_visibility`, `rename_member`, `save_assembly`, `get/edit_assembly_metadata`, `set_assembly_flags`, `list/add/remove_assembly_reference`, `inject_type_from_dll`, `patch_method_to_ret` | 15 | ✅ |
 | Agent Compatibility | `get_class_sourcecode`, `get_method_sourcecode`, `get_function_opcodes`, `set_function_opcodes`, `overwrite_full_function_opcodes`, `update_method_sourcecode` | 6 | ✅ |
 | Resource | `list_resources`, `get_resource`, `add_resource`, `remove_resource`, `extract_costura` | 5 | ✅ |
@@ -432,7 +448,7 @@ Usage-finding commands use dnlib IL traversal to identify:
 | SourceMap | `get_source_map_name`, `set_source_map_name`, `list_source_map_entries`, `save_source_map`, `load_source_map` | 5 | ✅ |
 | Native Runtime | `get_proc_address`, `patch_native_function`, `disassemble_native_function`, `inject_native_dll`, `inject_managed_dll`, `revert_patch`, `list_active_patches`, `read_native_memory`, `suspend_threads`, `resume_threads`, `get_peb` | 11 | ✅ |
 | Utility | `list_tools`, `get_mcp_config`, `reload_mcp_config` | 3 | ✅ |
-| **Total** | | **133** | ✅ |
+| **Total** | | **140** | ✅ |
 
 ---
 
@@ -489,17 +505,21 @@ dnSpy.MCP.Server/
 │  ├─ Presentation/   # UI integration (menus, settings UI)
 │  └─ Application/    # Command handlers
 │     ├─ McpTools.cs             # Dispatch + helpers (partial)
-│     ├─ McpTools.Schemas.cs     # Tool schemas — 13 categories (partial)
+│     ├─ McpTools.Schemas.cs     # Tool schemas — 17 categories (partial)
 │     ├─ AssemblyTools.cs
 │     ├─ TypeTools.cs
 │     ├─ EditTools.cs
-│     ├─ ResourceTools.cs
+│     ├─ AgentCompatibilityTools.cs
+│     ├─ MalwareAnalysisTools.cs
 │     ├─ DebugTools.cs
 │     ├─ DumpTools.cs
 │     ├─ MemoryInspectTools.cs
 │     ├─ UsageFindingCommandTools.cs
 │     ├─ CodeAnalysisHelpers.cs
 │     ├─ De4dotTools.cs
+│     ├─ SourceMapTools.cs
+│     ├─ NativeRuntimeTools.cs
+│     ├─ InterceptionTools.cs
 │     ├─ SkillsTools.cs
 │     ├─ ScriptTools.cs
 │     └─ WindowTools.cs
@@ -512,6 +532,6 @@ dnSpy.MCP.Server/
 ---
 
 ## Document Version
-- **Version**: 1.6
-- **Updated**: 2026-02-27
-- **Status**: Architecture documented for v1.6.0 — 95 tools, production ready
+- **Version**: main branch (post-v1.8.1)
+- **Updated**: 2026-04-06
+- **Status**: Architecture documented for the current main branch — 140 tools

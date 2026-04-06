@@ -2,6 +2,34 @@
 
 ---
 
+## main branch — post-v1.8.1
+
+### New: Protection / Malware Triage Toolkit
+
+The main branch now includes an initial static triage toolset for suspicious managed samples:
+
+| Tool | Description |
+|------|-------------|
+| `triage_sample` | One-call triage summary: suspicious strings, APIs, P/Invokes, `.cctor` activity, embedded PE payloads, and entropy hints |
+| `get_strings` | Managed string extraction from field constants and `ldstr` sites |
+| `search_il_pattern` | IL line / opcode-sequence hunting across all methods |
+| `analyze_static_constructors` | Bootstrap analysis of type static constructors |
+| `detect_string_encryption` | Heuristic ranking of likely string decryptors/decoders |
+| `find_byte_arrays` | Discovery of field RVA blobs and method-level byte-array staging sites |
+| `find_embedded_pes` | Detection of PE payloads hidden in resources or field data |
+
+### Design intent
+
+- keep the analysis **static-first** and safe for hostile samples
+- surface the first-pass signals an analyst usually wants immediately after loading an unknown assembly
+- complement, not replace, the existing deep decompilation / IL / patching tools
+
+### Current tool count on main
+
+- **140+ tools**
+
+---
+
 ## v1.8.1 — 2026-04-05
 
 ### New: AgentSmithers-Compatible Direct Editing
