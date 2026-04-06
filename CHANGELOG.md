@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.13] - 2026-04-06
+
+### Fixed
+- GitHub Actions now uses a split dnSpyEx source matrix:
+  - `net48` builds against `dnSpyEx/dnSpy@v6.5.1` to match the official `dnSpy-netframework` host and its `dnlib 4.4.0`
+  - `net10.0-windows` builds against `dnSpyEx/dnSpy@master`, which still carries the newer multi-target project shape required for the net10 package
+- This avoids the `project.assets.json` / missing `net10.0-windows` target failure seen in `v1.8.12` while keeping the net48 package compatible with the stock dnSpyEx 6.5.1 release.
+
 ## [1.8.12] - 2026-04-06
 
 ### Fixed

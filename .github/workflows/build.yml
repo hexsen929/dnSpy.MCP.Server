@@ -14,9 +14,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_framework:
-          - net48
-          - net10.0-windows
+        include:
+          - target_framework: net48
+            dnspy_ref: v6.5.1
+          - target_framework: net10.0-windows
+            dnspy_ref: master
 
     steps:
       - name: Checkout extension repository
@@ -28,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: dnSpyEx/dnSpy
-          ref: v6.5.1
+          ref: ${{ matrix.dnspy_ref }}
           submodules: recursive
           path: dnspy-src
 

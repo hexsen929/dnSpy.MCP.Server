@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.13 — 2026-04-06
+
+### Fixed: split upstream source selection by target
+
+- `net48` release builds now use `dnSpyEx/dnSpy@v6.5.1`
+- `net10.0-windows` release builds continue to use `dnSpyEx/dnSpy@master`
+- this keeps the net48 package aligned with the official `dnSpy-netframework` host while avoiding the missing `net10.0-windows` target failure introduced by the all-`v6.5.1` matrix in `v1.8.12`
+
+---
+
 ## v1.8.12 — 2026-04-06
 
 ### Fixed: older dnSpyEx output-path packaging
