@@ -2,6 +2,15 @@
 
 ---
 
+## v1.8.19 — 2026-04-07
+
+### Changed: win64 / net10 is now the primary host line
+
+- docs and release packaging metadata now treat `dnSpy-net-win64.zip` + `net10.0-windows` as the primary path
+- `dnSpy-netframework.zip` + `net48` remains supported as the compatibility path
+
+---
+
 ## v1.8.18 — 2026-04-06
 
 ### Fixed: workspace-wide fallback for net48 packaging

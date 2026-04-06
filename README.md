@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.18 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.19 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -103,6 +103,14 @@ The MCP server does **not** port HoLLy UI, MSAGL, AsmResolver backends, or symbo
 
 > **de4dot integration** — de4dot libraries are bundled in `libs/de4dot/` (net48) and `libs/de4dot-net8/` (net8/net10). No external dependencies required; all deobfuscation tools are available in both build targets.
 
+### Host package compatibility
+
+| dnSpy host package | Plugin target | Status | Notes |
+|---|---:|---|---|
+| `dnSpy-net-win64.zip` | `net10.0-windows` | **Primary / recommended** | Mainline path for modern 64-bit Windows installs. This is the default line we optimize for first. |
+| `dnSpy-netframework.zip` | `net48` | Compatibility | Kept for older / legacy host deployments. Must stay aligned with dnSpyEx `v6.5.1` and its `dnlib 4.4.0`. |
+| `dnSpy-net-win32.zip` | not primary in this repo | Legacy x86 host | Not the default path for this project. Use only if you explicitly need a 32-bit host. |
+
 ### Clone & Restore
 
 ```bash
@@ -152,12 +160,21 @@ dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release --no
 
 ### Recommended Windows deployment
 
-The safest deployment flow for the `net48` build is:
+The safest deployment flow for the **primary `net10.0-windows` / `dnSpy-net-win64.zip` line** is:
+
+1. unpack a **clean official dnSpyEx `dnSpy-net-win64.zip`** release into a new directory
+2. copy the contents of the MCP **`net10.0-windows` plugin-only bundle** into dnSpy's `bin` directory
+3. keep `dnSpy.exe`, `dnSpy.exe.config`, and the rest of the host tree from the clean dnSpy release
+4. launch dnSpy from a **local Windows drive** such as `C:\\dnSpy-net-win64\\dnSpy.exe`
+
+### Compatibility deployment (`net48`)
+
+The safest deployment flow for the `net48` compatibility build is:
 
 1. unpack a **clean official dnSpyEx netframework** release into a new directory
 2. copy the contents of the MCP **plugin-only bundle** into dnSpy's `bin` directory
 3. keep `dnSpy.exe`, `dnSpy.exe.config`, and the rest of the host tree from the clean dnSpy release
-4. launch dnSpy from a **local Windows drive** such as `C:\dnSpy-netframework\dnSpy.exe`
+4. launch dnSpy from a **local Windows drive** such as `C:\\dnSpy-netframework\\dnSpy.exe`
 
 Do **not**:
 

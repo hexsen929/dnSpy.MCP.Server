@@ -15,10 +15,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target_framework: net48
-            dnspy_ref: v6.5.1
           - target_framework: net10.0-windows
             dnspy_ref: master
+            host_package: dnSpy-net-win64.zip
+            host_line: primary
+          - target_framework: net48
+            dnspy_ref: v6.5.1
+            host_package: dnSpy-netframework.zip
+            host_line: compatibility
 
     steps:
       - name: Checkout extension repository
@@ -153,6 +157,7 @@ jobs:
 
           @"
           Copy these files into dnSpy's bin folder.
+          Preferred host package for this artifact: ${{ matrix.host_package }} (${{ matrix.host_line }} line).
           This package intentionally excludes dnSpy host binaries and broad transitive dependencies.
           Do not overwrite dnSpy.exe.config or replace the whole dnSpy directory with this zip.
           Optional stdio bridge is under stdio-proxy/ and forwards stdio MCP traffic to the local HTTP endpoint.
