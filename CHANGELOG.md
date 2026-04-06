@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.15] - 2026-04-06
+
+### Fixed
+- GitHub Actions packaging now probes the known legacy and current dnSpyEx release output directories explicitly before falling back to a repo-wide search, making the net48 package resilient across the old `v6.5.1` layout and the newer `master` layout.
+
 ## [1.8.14] - 2026-04-06
 
 ### Fixed

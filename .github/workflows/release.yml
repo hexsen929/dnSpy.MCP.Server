@@ -72,8 +72,25 @@ jobs:
       - name: Package release artifact
         shell: pwsh
         run: |
-          $allDlls = Get-ChildItem dnspy-src -Recurse -Filter 'dnSpy.MCP.Server.x.dll' |
-            Where-Object { $_.FullName -notmatch '[\\/]+obj[\\/]' }
+          $candidateOutDirs = @(
+            (Join-Path $PWD "dnspy-src/dnSpy/dnSpy/bin/Release/${{ matrix.target_framework }}"),
+            (Join-Path $PWD "dnspy-src/dnSpy/dnSpy/bin/Release"),
+            (Join-Path $PWD "dnspy-src/dnSpy/bin/Release/${{ matrix.target_framework }}"),
+            (Join-Path $PWD "dnspy-src/dnSpy/bin/Release")
+          ) | Where-Object { Test-Path $_ }
+
+          Write-Host "Candidate output directories:"
+          $candidateOutDirs | ForEach-Object { Write-Host " - $_" }
+
+          $allDlls = foreach ($dir in $candidateOutDirs) {
+            Get-ChildItem $dir -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File -ErrorAction SilentlyContinue
+          }
+
+          if (-not $allDlls) {
+            $allDlls = Get-ChildItem dnspy-src -Recurse -Filter 'dnSpy.MCP.Server.x.dll' -File |
+              Where-Object { $_.FullName -notmatch '[\\/]+obj[\\/]' }
+          }
+
           $releaseDlls = $allDlls |
             Where-Object { $_.FullName -match '[\\/]+bin[\\/]Release[\\/]' }
 

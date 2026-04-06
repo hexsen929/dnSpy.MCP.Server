@@ -2,6 +2,18 @@
 
 ---
 
+## v1.8.15 — 2026-04-06
+
+### Fixed: explicit legacy/current output probing in CI
+
+- release packaging now probes the known dnSpyEx output directories directly:
+  - legacy `v6.5.1` net48 layout
+  - current `master` net10 layout
+- only after that does it fall back to a wider repo search
+- this is intended to remove the last net48 packaging failure caused by older dnSpyEx layout differences
+
+---
+
 ## v1.8.14 — 2026-04-06
 
 ### Fixed: prefer real release outputs during packaging
