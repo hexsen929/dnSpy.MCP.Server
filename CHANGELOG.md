@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.8.3] - 2026-04-06
+## [1.8.4] - 2026-04-06
 
 ### Added
 - **Protection / malware triage tools** (10 tools — `MalwareAnalysisTools.cs`):
@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `localhost` listeners now also register `127.0.0.1`, avoiding `Bad Request - Invalid Hostname` when local clients use loopback IP form instead of hostname.
 - The bundled stdio proxy wrapper now defaults to `http://localhost:3100/mcp` instead of `127.0.0.1`.
+- If dual-prefix localhost startup fails on a given machine, the server now falls back automatically to a reduced prefix set instead of failing the whole listener startup.
 
 ### Documentation
 - README now documents the expanded protection / malware analysis tool group and updates the tool count to 143+ on the main branch.
