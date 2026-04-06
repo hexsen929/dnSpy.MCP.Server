@@ -24,6 +24,7 @@ using System.IO;
 using dnSpy.Contracts.Extension;
 using dnSpy.Contracts.Output;
 using dnSpy.Contracts.Text;
+using dnSpy.MCP.Server;
 
 namespace dnSpy.MCP.Server.Helper {
 	/// <summary>
@@ -265,7 +266,7 @@ namespace dnSpy.MCP.Server.Helper {
 				McpLogger.Info("═══════════════════════════════════════════════════════");
 				McpLogger.Info("MCP Server Output Pane Initialized");
 				McpLogger.Info($"Log file location: {McpLogger.LogFilePath}");
-				McpLogger.Info($"Version: {global::dnSpy.MCP.Server.ServerBuildInfo.Version}");
+				McpLogger.Info($"Version: {ServerBuildInfo.Version}");
 				McpLogger.Info("═══════════════════════════════════════════════════════");
 
 				// Flush any messages that were buffered before the pane existed
