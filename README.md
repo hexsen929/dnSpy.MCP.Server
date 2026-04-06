@@ -1261,6 +1261,20 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 | `de4dotSearchPaths` | `[]` | Extra directories to search for `de4dot.exe` (absolute or relative to this file). |
 | `de4dotMaxSearchDepth` | `6` | Directory levels to walk upward when auto-discovering a sibling `de4dot` repository. |
 
+Example: globally disable a few tools for every client:
+
+```json
+{
+  "toolCatalogMode": "full",
+  "disabledTools": [
+    "run_script",
+    "write_process_memory",
+    "patch_native_function"
+  ],
+  "clientToolPolicies": []
+}
+```
+
 Example: keep the full catalog globally, but hide selected runtime mutation tools only from Claude:
 
 ```json
@@ -1275,6 +1289,30 @@ Example: keep the full catalog globally, but hide selected runtime mutation tool
         "patch_native_function",
         "run_script"
       ]
+    }
+  ]
+}
+```
+
+Example: different policies for Claude and Codex at the same time:
+
+```json
+{
+  "toolCatalogMode": "full",
+  "disabledTools": ["run_script"],
+  "clientToolPolicies": [
+    {
+      "clientNamePattern": "Claude",
+      "toolCatalogMode": "default",
+      "disabledTools": [
+        "write_process_memory",
+        "patch_native_function"
+      ]
+    },
+    {
+      "clientNamePattern": "Codex",
+      "toolCatalogMode": "full",
+      "disabledTools": []
     }
   ]
 }
