@@ -2,6 +2,21 @@
 
 ---
 
+## v1.8.27 — 2026-04-07
+
+### Fixed: schema-level duplicate-assembly disambiguation
+
+- the edit/metadata/resource tool schemas now expose the loaded-assembly disambiguation fields added in `v1.8.26`, so Claude/Codex can actually discover and send them instead of guessing undocumented arguments
+- this covers the duplicate-name paths most likely to patch/save/remove the wrong loaded copy:
+  - member visibility / rename / save
+  - assembly metadata / attributes / references
+  - type injection / pinvoke listing / patch-to-ret
+  - native module listing
+  - resource listing / extraction / removal
+  - resource embedding via `assembly_file_path`
+
+---
+
 ## v1.8.26 — 2026-04-07
 
 ### Fixed: duplicate-assembly editing and remaining UI/document races
