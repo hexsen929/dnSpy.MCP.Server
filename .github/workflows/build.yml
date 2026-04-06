@@ -78,11 +78,21 @@ jobs:
       - name: Package build output
         shell: pwsh
         run: |
-          $allDlls = Get-ChildItem dnspy-src -Recurse -Filter 'dnSpy.MCP.Server.x.dll'
-          $dll = $allDlls |
+          $allDlls = Get-ChildItem dnspy-src -Recurse -Filter 'dnSpy.MCP.Server.x.dll' |
+            Where-Object { $_.FullName -notmatch '[\\/]+obj[\\/]' }
+          $releaseDlls = $allDlls |
+            Where-Object { $_.FullName -match '[\\/]+bin[\\/]Release[\\/]' }
+
+          $dll = $releaseDlls |
             Where-Object { $_.FullName -match [regex]::Escape("${{ matrix.target_framework }}") } |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
+
+          if (-not $dll) {
+            $dll = $releaseDlls |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 1
+          }
 
           if (-not $dll) {
             $dll = $allDlls |

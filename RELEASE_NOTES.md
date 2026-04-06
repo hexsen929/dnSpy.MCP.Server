@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.14 — 2026-04-06
+
+### Fixed: prefer real release outputs during packaging
+
+- release packaging now ignores `obj/` copies of `dnSpy.MCP.Server.x.dll`
+- packaging prefers `bin/Release` outputs first, which matches the older dnSpyEx 6.5.1 net48 layout
+- this fixes the remaining net48 packaging failure from `v1.8.13`
+
+---
+
 ## v1.8.13 — 2026-04-06
 
 ### Fixed: split upstream source selection by target

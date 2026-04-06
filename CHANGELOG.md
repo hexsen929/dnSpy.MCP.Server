@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.14] - 2026-04-06
+
+### Fixed
+- GitHub Actions packaging now ignores `obj/` copies of `dnSpy.MCP.Server.x.dll` and prefers `bin/Release` outputs first, fixing the remaining net48 packaging failure seen in `v1.8.13` when the fallback picked an intermediate DLL from the old dnSpyEx 6.5.1 layout.
+
 ## [1.8.13] - 2026-04-06
 
 ### Fixed
