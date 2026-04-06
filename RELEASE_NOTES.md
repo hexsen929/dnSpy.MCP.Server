@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.7 — 2026-04-06
+
+### Changed: Sessionless discovery for MCP clients
+
+- `tools/list`, `resources/list`, `prompts/list`, and `ping` now work without a prior `initialize`
+- `tools/call`, `resources/read`, SSE stream attach, and explicit session close still use streamable HTTP session IDs
+- intended to match the behavior expected by Claude/Codex management probes without removing multi-client session isolation
+
+---
+
 ## v1.8.6 — 2026-04-06
 
 ### Changed: Removed localhost dual-prefix listener logic

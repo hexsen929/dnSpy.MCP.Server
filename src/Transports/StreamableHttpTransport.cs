@@ -75,6 +75,7 @@ namespace dnSpy.MCP.Server.Transports {
 
 			var sessionIdHeader = context.Request.Headers[McpProtocolHelpers.SessionHeaderName];
 			var isInitialize = McpProtocolHelpers.IsInitializeRequest(request!);
+			var allowAnonymous = AllowsAnonymousRequest(request!);
 			McpSessionState? session;
 
 			if (isInitialize) {
@@ -93,6 +94,8 @@ namespace dnSpy.MCP.Server.Transports {
 			}
 			else {
 				session = GetExistingStreamableSession(sessionIdHeader);
+				if (session == null && allowAnonymous)
+					session = sessionManager.CreateAnonymousSession(McpTransportKind.StreamableHttp);
 			}
 
 			if (session == null) {
@@ -166,6 +169,13 @@ namespace dnSpy.MCP.Server.Transports {
 			if (session!.Transport != McpTransportKind.StreamableHttp)
 				return null;
 			return session;
+		}
+
+		static bool AllowsAnonymousRequest(McpRequest request) {
+			return string.Equals(request.Method, "tools/list", StringComparison.Ordinal) ||
+			       string.Equals(request.Method, "resources/list", StringComparison.Ordinal) ||
+			       string.Equals(request.Method, "prompts/list", StringComparison.Ordinal) ||
+			       string.Equals(request.Method, "ping", StringComparison.Ordinal);
 		}
 
 		async Task RunHeartbeatLoopAsync(SseConnection connection, CancellationToken cancellationToken) {

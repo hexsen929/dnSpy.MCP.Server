@@ -18,6 +18,14 @@ namespace dnSpy.MCP.Server.Core {
 			}
 		}
 
+		public McpSessionState CreateAnonymousSession(McpTransportKind transport) {
+			var state = new McpSessionState($"anonymous:{Guid.NewGuid():N}", transport) {
+				IsAnonymous = true,
+				IsInitialized = true,
+			};
+			return state;
+		}
+
 		public bool TryGetSession(string? sessionId, out McpSessionState? session) {
 			session = null;
 			if (string.IsNullOrWhiteSpace(sessionId))
@@ -53,7 +61,8 @@ namespace dnSpy.MCP.Server.Core {
 		public McpTransportKind Transport { get; }
 		public DateTime CreatedAtUtc { get; }
 		public DateTime LastSeenAtUtc { get; private set; }
-		public bool IsInitialized { get; private set; }
+		public bool IsInitialized { get; internal set; }
+		public bool IsAnonymous { get; internal set; }
 		public string? ProtocolVersion { get; private set; }
 
 		internal McpSessionState(string sessionId, McpTransportKind transport) {
