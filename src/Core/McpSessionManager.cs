@@ -39,9 +39,9 @@ namespace dnSpy.MCP.Server.Core {
 				session!.Touch();
 		}
 
-		public void MarkInitialized(string sessionId, string? protocolVersion) {
+		public void MarkInitialized(string sessionId, string? protocolVersion, string? clientName, string? clientVersion) {
 			if (TryGetSession(sessionId, out var session))
-				session!.MarkInitialized(protocolVersion);
+				session!.MarkInitialized(protocolVersion, clientName, clientVersion);
 		}
 
 		public bool RemoveSession(string? sessionId) {
@@ -64,6 +64,8 @@ namespace dnSpy.MCP.Server.Core {
 		public bool IsInitialized { get; internal set; }
 		public bool IsAnonymous { get; internal set; }
 		public string? ProtocolVersion { get; private set; }
+		public string? ClientName { get; private set; }
+		public string? ClientVersion { get; private set; }
 
 		internal McpSessionState(string sessionId, McpTransportKind transport) {
 			SessionId = sessionId;
@@ -74,9 +76,11 @@ namespace dnSpy.MCP.Server.Core {
 
 		internal void Touch() => LastSeenAtUtc = DateTime.UtcNow;
 
-		internal void MarkInitialized(string? protocolVersion) {
+		internal void MarkInitialized(string? protocolVersion, string? clientName, string? clientVersion) {
 			IsInitialized = true;
 			ProtocolVersion = protocolVersion;
+			ClientName = clientName;
+			ClientVersion = clientVersion;
 			Touch();
 		}
 	}

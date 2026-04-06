@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.22 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.23 | **Tools**: 143 base catalog (config can filter per client) | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -914,7 +914,7 @@ Enumerate and dismiss dialog boxes (Win32 `MessageBox`, `#32770` dialogs, and WP
 
 | Tool | Description | Required params |
 |------|-------------|-----------------|
-| `list_tools` | Return the full schema for every registered tool as JSON | — |
+| `list_tools` | Return the schema for the current client-visible tool catalog as JSON (full by default; config can filter/disable per client) | — |
 | `get_mcp_config` | Return the current MCP server configuration and the path to `mcp-config.json` | — |
 | `reload_mcp_config` | Reload `mcp-config.json` from disk without restarting dnSpy | — |
 
@@ -1120,7 +1120,7 @@ The tool catalog now exposes metadata intended to improve client-side discoverab
 - `preferred_replacement`
 - `notes`
 
-`tools/list` hides tools marked `hidden_by_default` unless the client explicitly requests the full catalog. `list_tools` mirrors the same behavior and returns the same catalog metadata in-band.
+`tools/list` now returns the full 143-tool base catalog by default. If you want the old filtered view back, set `toolCatalogMode` to `"default"` in `mcp-config.json`, or pass `mode="default"` in the request. `list_tools` mirrors the same behavior and returns the same catalog metadata in-band. Global `disabledTools` and per-client `clientToolPolicies` remove tools from both `tools/list` and `tools/call`.
 
 | File | Responsibility |
 |------|---------------|
@@ -1207,6 +1207,20 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
   "host": "127.0.0.1",
   "port": 3100,
   "listenerMode": "httpListener",
+  "toolCatalogMode": "full",
+  "disabledTools": [],
+  "clientToolPolicies": [
+    {
+      "clientNamePattern": "Claude",
+      "toolCatalogMode": "full",
+      "disabledTools": []
+    },
+    {
+      "clientNamePattern": "Codex",
+      "toolCatalogMode": "full",
+      "disabledTools": []
+    }
+  ],
   "requireApiKey": false,
   "apiKey": "",
   "enableRunScript": false,
@@ -1221,6 +1235,9 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 | `host` | `"127.0.0.1"` | Bind address for local-only access. `localhost` is also supported, but the server binds only the configured host value. Use `"0.0.0.0"` to listen on all interfaces (for remote debugging from a sandbox or VM). See note below. |
 | `port` | `3100` | TCP port the server listens on. |
 | `listenerMode` | `"httpListener"` | Listener backend. Use `tcpListener` to bypass CrossOver/Wine `HttpListener` quirks; use `httpListener` when you need legacy `/sse` + `/message`; use `auto` to prefer `tcpListener` in Wine-like environments and `httpListener` elsewhere. |
+| `toolCatalogMode` | `"full"` | Default tool listing mode for clients that do not explicitly request a mode. Use `"full"` to show the entire catalog by default, or `"default"` to hide tools marked `hidden_by_default`. |
+| `disabledTools` | `[]` | Global denylist. Removed from `tools/list` and rejected by `tools/call` for every client. |
+| `clientToolPolicies` | `[]` | Per-client overrides matched by `initialize.clientInfo.name` substring. Matching rules can override `toolCatalogMode` and append more `disabledTools`. |
 | `requireApiKey` | `false` | Require `X-API-Key` / `Authorization: Bearer` on every request. |
 | `apiKey` | `""` | API key value. Generate with `openssl rand -hex 32`. |
 | `enableRunScript` | `false` | Enable the `run_script` tool (Roslyn C# scripting). Set to `true` only in trusted environments. |
@@ -1228,13 +1245,32 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 | `de4dotSearchPaths` | `[]` | Extra directories to search for `de4dot.exe` (absolute or relative to this file). |
 | `de4dotMaxSearchDepth` | `6` | Directory levels to walk upward when auto-discovering a sibling `de4dot` repository. |
 
+Example: keep the full catalog globally, but hide selected runtime mutation tools only from Claude:
+
+```json
+{
+  "toolCatalogMode": "full",
+  "disabledTools": [],
+  "clientToolPolicies": [
+    {
+      "clientNamePattern": "Claude",
+      "disabledTools": [
+        "write_process_memory",
+        "patch_native_function",
+        "run_script"
+      ]
+    }
+  ]
+}
+```
+
 > **Remote access** — when `listenerMode` is `httpListener` and `host` is `"0.0.0.0"` or `"*"`, the server binds with the HttpListener wildcard `+`. This requires a one-time URL ACL reservation (run as Administrator):
 > ```
 > netsh http add urlacl url=http://+:3100/ user=Everyone
 > ```
 > Then point your MCP client at `http://<dnspy-machine-ip>:3100/mcp`. In `tcpListener` mode, normal socket binding is used instead and no HttpListener URL ACL is required.
 
-After editing `mcp-config.json`, call `reload_mcp_config`. Changes to `host`, `port`, or `listenerMode` take effect the next time the MCP server restarts.
+After editing `mcp-config.json`, call `reload_mcp_config`. Changes to `host`, `port`, or `listenerMode` take effect the next time the MCP server restarts. `toolCatalogMode`, `disabledTools`, and `clientToolPolicies` take effect immediately for subsequent `tools/list` / `tools/call` requests after reload.
 
 ### Verify the server is running
 

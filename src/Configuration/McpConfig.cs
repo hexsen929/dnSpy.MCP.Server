@@ -33,6 +33,40 @@ namespace dnSpy.MCP.Server.Configuration
         Auto,
     }
 
+    public enum McpToolCatalogMode
+    {
+        Default,
+        Full,
+    }
+
+    public sealed class McpClientToolPolicy
+    {
+        [JsonPropertyName("clientNamePattern")]
+        public string ClientNamePattern { get; set; } = "";
+
+        [JsonPropertyName("toolCatalogMode")]
+        public string? ToolCatalogMode { get; set; }
+
+        [JsonPropertyName("disabledTools")]
+        public List<string> DisabledTools { get; set; } = new List<string>();
+
+        public bool Matches(string? clientName)
+        {
+            if (string.IsNullOrWhiteSpace(ClientNamePattern) || string.IsNullOrWhiteSpace(clientName))
+                return false;
+
+            return clientName!.IndexOf(ClientNamePattern, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+    }
+
+    public sealed class McpResolvedToolPolicy
+    {
+        public string? ClientName { get; set; }
+        public McpToolCatalogMode ToolCatalogMode { get; set; } = McpToolCatalogMode.Full;
+        public List<string> DisabledTools { get; } = new List<string>();
+        public List<string> MatchedClientPatterns { get; } = new List<string>();
+    }
+
     /// <summary>
     /// Loads and holds settings from mcp-config.json, which lives alongside the
     /// MCP server DLL in the dnSpy output directory.
@@ -79,6 +113,30 @@ namespace dnSpy.MCP.Server.Configuration
         /// </summary>
         [JsonPropertyName("listenerMode")]
         public string ListenerMode { get; set; } = "httpListener";
+
+        /// <summary>
+        /// Default tool catalog mode for clients that do not explicitly pass
+        /// mode=default/full during tools/list.
+        /// Valid values: "full", "default".
+        /// </summary>
+        [JsonPropertyName("toolCatalogMode")]
+        public string ToolCatalogMode { get; set; } = "full";
+
+        /// <summary>
+        /// Tool names disabled for every client. These are removed from tools/list
+        /// and rejected by tools/call.
+        /// </summary>
+        [JsonPropertyName("disabledTools")]
+        public List<string> DisabledTools { get; set; } = new List<string>();
+
+        /// <summary>
+        /// Optional per-client tool policy overrides. A rule matches when
+        /// initialize.clientInfo.name contains clientNamePattern (case-insensitive).
+        /// Matching rules merge disabledTools; the last matching non-empty
+        /// toolCatalogMode wins.
+        /// </summary>
+        [JsonPropertyName("clientToolPolicies")]
+        public List<McpClientToolPolicy> ClientToolPolicies { get; set; } = new List<McpClientToolPolicy>();
 
         /// <summary>If true, all requests must include X-API-Key or Authorization: Bearer <ApiKey>.</summary>
         [JsonPropertyName("requireApiKey")]
@@ -221,6 +279,100 @@ namespace dnSpy.MCP.Server.Configuration
             default:
                 return "httpListener";
             }
+        }
+
+        public McpToolCatalogMode GetToolCatalogMode()
+        {
+            return ParseToolCatalogMode(ToolCatalogMode);
+        }
+
+        public static McpToolCatalogMode ParseToolCatalogMode(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return McpToolCatalogMode.Full;
+
+            switch (value.Trim().ToLowerInvariant())
+            {
+            case "default":
+            case "filtered":
+                return McpToolCatalogMode.Default;
+            case "full":
+            case "all":
+                return McpToolCatalogMode.Full;
+            default:
+                return McpToolCatalogMode.Full;
+            }
+        }
+
+        public static string ToConfigValue(McpToolCatalogMode mode)
+        {
+            switch (mode)
+            {
+            case McpToolCatalogMode.Default:
+                return "default";
+            default:
+                return "full";
+            }
+        }
+
+        public McpResolvedToolPolicy ResolveToolPolicy(string? clientName)
+        {
+            var resolved = new McpResolvedToolPolicy
+            {
+                ClientName = clientName,
+                ToolCatalogMode = GetToolCatalogMode(),
+            };
+
+            AddUniqueToolNames(resolved.DisabledTools, DisabledTools);
+
+            foreach (var policy in ClientToolPolicies)
+            {
+                if (policy == null || !policy.Matches(clientName))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(policy.ToolCatalogMode))
+                    resolved.ToolCatalogMode = ParseToolCatalogMode(policy.ToolCatalogMode);
+
+                AddUniqueToolNames(resolved.DisabledTools, policy.DisabledTools);
+                AddUniquePattern(resolved.MatchedClientPatterns, policy.ClientNamePattern);
+            }
+
+            return resolved;
+        }
+
+        static void AddUniqueToolNames(List<string> destination, IEnumerable<string>? source)
+        {
+            if (source == null)
+                return;
+
+            foreach (var toolName in source)
+            {
+                if (string.IsNullOrWhiteSpace(toolName))
+                    continue;
+
+                if (!ContainsIgnoreCase(destination, toolName))
+                    destination.Add(toolName);
+            }
+        }
+
+        static void AddUniquePattern(List<string> destination, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return;
+
+            if (!ContainsIgnoreCase(destination, value))
+                destination.Add(value);
+        }
+
+        static bool ContainsIgnoreCase(List<string> values, string candidate)
+        {
+            foreach (var value in values)
+            {
+                if (string.Equals(value, candidate, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         // ── de4dot resolution ─────────────────────────────────────────────────

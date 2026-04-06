@@ -2,6 +2,24 @@
 
 ---
 
+## v1.8.23 — 2026-04-07
+
+### Added: config-driven tool policy control
+
+- `mcp-config.json` now supports:
+  - `toolCatalogMode`
+  - `disabledTools`
+  - `clientToolPolicies`
+- tool policy can now be applied globally or per client based on `initialize.clientInfo.name`
+
+### Changed
+
+- the server now returns the full 143-tool base catalog by default
+- if you want the old 137-tool filtered view back, set `toolCatalogMode` to `default`
+- disabled tools are removed from both `tools/list` and `list_tools`, and direct `tools/call` attempts are rejected with a policy error
+
+---
+
 ## v1.8.22 — 2026-04-07
 
 ### Changed: extension-folder output and package layout

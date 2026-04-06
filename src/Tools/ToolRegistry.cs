@@ -40,8 +40,8 @@ namespace dnSpy.MCP.Server.Tools {
 			return tools.GetAvailableTools().Any(a => string.Equals(a.Name, normalizedToolName, StringComparison.Ordinal));
 		}
 
-		public CallToolResult ExecuteTool(string toolName, Dictionary<string, object>? arguments) =>
-			tools.ExecuteTool(NormalizeToolName(toolName), arguments);
+		public CallToolResult ExecuteTool(string toolName, Dictionary<string, object>? arguments, ToolCatalogFilter? catalogFilter = null) =>
+			tools.ExecuteTool(NormalizeToolName(toolName), arguments, catalogFilter);
 
 		public IReadOnlyList<ResourceInfo> ListResources() => resources.GetResources();
 

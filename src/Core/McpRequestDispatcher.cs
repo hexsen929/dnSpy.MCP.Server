@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using dnSpy.MCP.Server.Application;
+using dnSpy.MCP.Server.Configuration;
 using dnSpy.MCP.Server.Contracts;
 using dnSpy.MCP.Server.Helper;
 using dnSpy.MCP.Server.Tools;
@@ -60,7 +61,7 @@ namespace dnSpy.MCP.Server.Core {
 			case "ping":
 				return new Dictionary<string, object>();
 			case "tools/list":
-				return new ListToolsResult { Tools = toolRegistry.ListTools(CreateCatalogFilter(context.Request.Params)).ToList() };
+				return new ListToolsResult { Tools = toolRegistry.ListTools(CreateCatalogFilter(ResolveToolAccessPolicy(context), context.Request.Params)).ToList() };
 			case "tools/call":
 				return HandleCallTool(context);
 			case "resources/list":
@@ -76,11 +77,12 @@ namespace dnSpy.MCP.Server.Core {
 
 		object HandleInitialize(McpRequestContext context) {
 			var protocolVersion = McpProtocolHelpers.GetString(context.Request.Params, "protocolVersion") ?? McpProtocolHelpers.DefaultProtocolVersion;
+			var (clientName, clientVersion) = GetClientInfo(context.Request.Params);
 			var sessionId = context.SessionId;
 			if (!string.IsNullOrWhiteSpace(sessionId))
-				sessionManager.MarkInitialized(sessionId!, protocolVersion);
+				sessionManager.MarkInitialized(sessionId!, protocolVersion, clientName, clientVersion);
 
-			McpLogger.Info($"mcp.initialize transport={context.Transport.ToLogValue()} sessionId={context.SessionId ?? "-"} protocolVersion={protocolVersion}");
+			McpLogger.Info($"mcp.initialize transport={context.Transport.ToLogValue()} sessionId={context.SessionId ?? "-"} protocolVersion={protocolVersion} client={clientName ?? "-"} clientVersion={clientVersion ?? "-"}");
 
 			return new InitializeResult {
 				ProtocolVersion = protocolVersion,
@@ -104,14 +106,30 @@ namespace dnSpy.MCP.Server.Core {
 			if (string.IsNullOrWhiteSpace(toolName))
 				throw new McpProtocolException(-32602, "Tool call requires a non-empty 'name' parameter.");
 			var normalizedToolName = toolRegistry.NormalizeToolName(toolName!);
+			var accessPolicy = ResolveToolAccessPolicy(context);
 
 			if (!toolRegistry.ContainsTool(normalizedToolName))
 				throw new McpProtocolException(-32602, $"Unknown tool: {normalizedToolName}", HttpStatusCode.BadRequest, new { name = normalizedToolName });
 
+			if (accessPolicy.DisabledToolNames.Contains(normalizedToolName))
+				throw new McpProtocolException(
+					-32003,
+					$"Tool disabled by policy: {normalizedToolName}",
+					HttpStatusCode.Forbidden,
+					new {
+						name = normalizedToolName,
+						client = accessPolicy.ClientName ?? "",
+						clientVersion = accessPolicy.ClientVersion ?? "",
+						configPath = McpConfig.ConfigFilePath,
+					});
+
 			var toolArguments = McpProtocolHelpers.GetObject(context.Request.Params, "arguments");
+			var catalogFilter = string.Equals(normalizedToolName, "list_tools", StringComparison.Ordinal)
+				? CreateCatalogFilter(accessPolicy, toolArguments)
+				: null;
 			var stopwatch = Stopwatch.StartNew();
 			try {
-				var result = toolRegistry.ExecuteTool(normalizedToolName, toolArguments);
+				var result = toolRegistry.ExecuteTool(normalizedToolName, toolArguments, catalogFilter);
 				stopwatch.Stop();
 				McpLogger.Info($"mcp.tool transport={context.Transport.ToLogValue()} sessionId={context.SessionId ?? "-"} requestId={context.RequestId ?? "null"} name={normalizedToolName} durationMs={stopwatch.ElapsedMilliseconds} isError={result.IsError}");
 				return result;
@@ -144,11 +162,49 @@ namespace dnSpy.MCP.Server.Core {
 			};
 		}
 
-		static ToolCatalogFilter CreateCatalogFilter(Dictionary<string, object>? args) {
-			bool includeHidden = false;
+		static (string? Name, string? Version) GetClientInfo(Dictionary<string, object>? args) {
+			var clientInfo = McpProtocolHelpers.GetObject(args, "clientInfo");
+			if (clientInfo == null)
+				return (null, null);
+
+			return (
+				McpProtocolHelpers.GetString(clientInfo, "name"),
+				McpProtocolHelpers.GetString(clientInfo, "version")
+			);
+		}
+
+		EffectiveToolAccessPolicy ResolveToolAccessPolicy(McpRequestContext context) {
+			string? clientName = null;
+			string? clientVersion = null;
+
+			if (!string.IsNullOrWhiteSpace(context.SessionId) &&
+				sessionManager.TryGetSession(context.SessionId, out var session) &&
+				session != null) {
+				clientName = session.ClientName;
+				clientVersion = session.ClientVersion;
+			}
+
+			var resolved = McpConfig.Instance.ResolveToolPolicy(clientName);
+			var policy = new EffectiveToolAccessPolicy {
+				ClientName = clientName,
+				ClientVersion = clientVersion,
+				IncludeHiddenByDefault = resolved.ToolCatalogMode == McpToolCatalogMode.Full,
+			};
+
+			foreach (var disabledToolName in resolved.DisabledTools) {
+				var normalizedToolName = toolRegistry.NormalizeToolName(disabledToolName);
+				if (!string.IsNullOrWhiteSpace(normalizedToolName))
+					policy.DisabledToolNames.Add(normalizedToolName);
+			}
+
+			return policy;
+		}
+
+		static ToolCatalogFilter CreateCatalogFilter(EffectiveToolAccessPolicy accessPolicy, Dictionary<string, object>? args) {
+			bool includeHidden = accessPolicy.IncludeHiddenByDefault;
 			var mode = McpProtocolHelpers.GetString(args, "mode");
-			if (string.Equals(mode, "full", StringComparison.OrdinalIgnoreCase))
-				includeHidden = true;
+			if (!string.IsNullOrWhiteSpace(mode))
+				includeHidden = string.Equals(mode, "full", StringComparison.OrdinalIgnoreCase);
 
 			if (args != null && args.TryGetValue("include_hidden", out var includeHiddenObj)) {
 				if (includeHiddenObj is bool hiddenBool) includeHidden = hiddenBool;
@@ -156,7 +212,17 @@ namespace dnSpy.MCP.Server.Core {
 				else if (bool.TryParse(includeHiddenObj?.ToString(), out var parsed)) includeHidden = parsed;
 			}
 
-			return new ToolCatalogFilter { IncludeHiddenByDefault = includeHidden };
+			var filter = new ToolCatalogFilter { IncludeHiddenByDefault = includeHidden };
+			foreach (var disabledToolName in accessPolicy.DisabledToolNames)
+				filter.DisabledToolNames.Add(disabledToolName);
+			return filter;
+		}
+
+		sealed class EffectiveToolAccessPolicy {
+			public string? ClientName { get; set; }
+			public string? ClientVersion { get; set; }
+			public bool IncludeHiddenByDefault { get; set; }
+			public HashSet<string> DisabledToolNames { get; } = new HashSet<string>(StringComparer.Ordinal);
 		}
 	}
 }

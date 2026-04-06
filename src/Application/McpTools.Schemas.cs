@@ -27,6 +27,7 @@ namespace dnSpy.MCP.Server.Application
     public sealed class ToolCatalogFilter
     {
         public bool IncludeHiddenByDefault { get; set; }
+        public HashSet<string> DisabledToolNames { get; } = new HashSet<string>(StringComparer.Ordinal);
     }
 
     public sealed partial class McpTools
@@ -2103,17 +2104,17 @@ namespace dnSpy.MCP.Server.Application
         List<ToolInfo> GetUtilityToolSchemas() => new List<ToolInfo> {
             new ToolInfo {
                 Name = "list_tools",
-                Description = "List MCP tools with catalog metadata. Default mode hides tools marked hidden_by_default; pass mode='full' or include_hidden=true to see the complete catalog.",
+                Description = "List MCP tools with catalog metadata. The server returns the full catalog by default unless mcp-config.json sets toolCatalogMode='default'. Pass mode='full' or include_hidden=true to force the complete catalog view.",
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
                         ["mode"] = new Dictionary<string, object> {
                             ["type"] = "string",
-                            ["description"] = "Catalog listing mode: 'default' hides hidden_by_default tools, 'full' returns the complete catalog."
+                            ["description"] = "Catalog listing mode override: 'default' hides hidden_by_default tools, 'full' returns the complete catalog."
                         },
                         ["include_hidden"] = new Dictionary<string, object> {
                             ["type"] = "boolean",
-                            ["description"] = "Optional explicit override. When true, include tools marked hidden_by_default."
+                            ["description"] = "Optional explicit override. When true, include tools marked hidden_by_default regardless of the configured default mode."
                         }
                     },
                     ["required"] = new List<string>()
@@ -2146,12 +2147,15 @@ namespace dnSpy.MCP.Server.Application
 
         static List<ToolInfo> FilterCatalogTools(List<ToolInfo> tools, ToolCatalogFilter? filter)
         {
-            if (filter == null || filter.IncludeHiddenByDefault)
-                return tools;
+            IEnumerable<ToolInfo> query = tools;
 
-            return tools
-                .Where(t => t.Catalog?.HiddenByDefault != true)
-                .ToList();
+            if (filter != null && !filter.IncludeHiddenByDefault)
+                query = query.Where(t => t.Catalog?.HiddenByDefault != true);
+
+            if (filter != null && filter.DisabledToolNames.Count != 0)
+                query = query.Where(t => !filter.DisabledToolNames.Contains(t.Name));
+
+            return query.ToList();
         }
 
         static ToolCatalogMetadata BuildCatalogMetadata(string toolName, string defaultCategory)
@@ -2282,7 +2286,7 @@ namespace dnSpy.MCP.Server.Application
                 metadata.Notes = "One-call protection summary that aggregates anti-debug, anti-tamper, string-decryptor, payload-staging, and entropy hints for suspicious assemblies.";
                 break;
             case "list_tools":
-                metadata.Notes = "Default mode hides tools marked hidden_by_default. Use mode='full' or include_hidden=true for the complete catalog.";
+                metadata.Notes = "Full catalog is returned by default unless mcp-config.json sets toolCatalogMode='default'. mode='full' / include_hidden=true can force hidden_by_default tools back into the listing. disabledTools and clientToolPolicies still remove tools from the final catalog.";
                 break;
             }
 

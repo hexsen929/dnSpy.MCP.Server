@@ -2,6 +2,20 @@
   "host": "127.0.0.1",
   "port": 3100,
   "listenerMode": "httpListener",
+  "toolCatalogMode": "full",
+  "disabledTools": [],
+  "clientToolPolicies": [
+    {
+      "clientNamePattern": "Claude",
+      "toolCatalogMode": "full",
+      "disabledTools": []
+    },
+    {
+      "clientNamePattern": "Codex",
+      "toolCatalogMode": "full",
+      "disabledTools": []
+    }
+  ],
   "de4dotExePath": "",
   "de4dotSearchPaths": []
 }

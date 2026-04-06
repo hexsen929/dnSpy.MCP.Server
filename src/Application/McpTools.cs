@@ -26,6 +26,7 @@ using System.Text;
 using System.Text.Json;
 using dnlib.DotNet;
 using dnSpy.Contracts.Documents.Tabs.DocViewer;
+using dnSpy.MCP.Server.Configuration;
 using dnSpy.MCP.Server.Contracts;
 using dnSpy.MCP.Server.Helper;
 
@@ -103,7 +104,7 @@ namespace dnSpy.MCP.Server.Application
 
         // GetAvailableTools() is defined in McpTools.Schemas.cs (partial class)
 
-        public CallToolResult ExecuteTool(string toolName, Dictionary<string, object>? arguments)
+        public CallToolResult ExecuteTool(string toolName, Dictionary<string, object>? arguments, ToolCatalogFilter? catalogFilter = null)
         {
             McpLogger.Info($"Executing tool: {toolName}");
 
@@ -111,7 +112,7 @@ namespace dnSpy.MCP.Server.Application
             {
                 var result = toolName switch
                 {
-                    "list_tools" => ListTools(arguments),
+                    "list_tools" => ListTools(arguments, catalogFilter),
                     "list_assemblies"      => InvokeLazy(assemblyTools, "ListAssemblies",      null),
                     "select_assembly"      => InvokeLazy(assemblyTools, "SelectAssembly",      arguments),
                     "close_assembly"       => InvokeLazy(assemblyTools, "CloseAssembly",       arguments),
@@ -326,9 +327,9 @@ namespace dnSpy.MCP.Server.Application
             }
         }
 
-        CallToolResult ListTools(Dictionary<string, object>? arguments)
+        CallToolResult ListTools(Dictionary<string, object>? arguments, ToolCatalogFilter? baseFilter = null)
         {
-            var tools = GetAvailableTools(CreateCatalogFilter(arguments));
+            var tools = GetAvailableTools(CreateCatalogFilter(arguments, baseFilter));
             var json = JsonSerializer.Serialize(tools, new JsonSerializerOptions { WriteIndented = true });
             return new CallToolResult
             {
@@ -424,10 +425,14 @@ namespace dnSpy.MCP.Server.Application
             return v?.ToString() ?? def;
         }
 
-        static ToolCatalogFilter CreateCatalogFilter(Dictionary<string, object>? arguments)
+        static ToolCatalogFilter CreateCatalogFilter(Dictionary<string, object>? arguments, ToolCatalogFilter? baseFilter = null)
         {
-            var mode = OptionalString(arguments, "mode", "default");
-            var includeHidden = string.Equals(mode, "full", StringComparison.OrdinalIgnoreCase);
+            var includeHidden = baseFilter?.IncludeHiddenByDefault
+                ?? (McpConfig.Instance.GetToolCatalogMode() == McpToolCatalogMode.Full);
+
+            var mode = OptionalString(arguments, "mode", null);
+            if (!string.IsNullOrWhiteSpace(mode))
+                includeHidden = string.Equals(mode, "full", StringComparison.OrdinalIgnoreCase);
 
             if (arguments != null && arguments.TryGetValue("include_hidden", out var includeHiddenValue))
             {
@@ -439,10 +444,18 @@ namespace dnSpy.MCP.Server.Application
                     includeHidden = parsed;
             }
 
-            return new ToolCatalogFilter
+            var filter = new ToolCatalogFilter
             {
                 IncludeHiddenByDefault = includeHidden
             };
+
+            if (baseFilter != null)
+            {
+                foreach (var disabledToolName in baseFilter.DisabledToolNames)
+                    filter.DisabledToolNames.Add(disabledToolName);
+            }
+
+            return filter;
         }
 
         // ── Config management handlers ────────────────────────────────────────
@@ -458,6 +471,10 @@ namespace dnSpy.MCP.Server.Application
                 Port               = cfg.Port,
                 ListenerMode       = cfg.ListenerMode,
                 ParsedListenerMode = Configuration.McpConfig.ToConfigValue(cfg.GetListenerMode()),
+                ToolCatalogMode    = cfg.ToolCatalogMode,
+                ParsedToolCatalogMode = Configuration.McpConfig.ToConfigValue(cfg.GetToolCatalogMode()),
+                DisabledTools      = cfg.DisabledTools,
+                ClientToolPolicies = cfg.ClientToolPolicies,
                 RestartRequiredForListenerChanges = true,
                 De4dotExePath      = cfg.De4dotExePath,
                 De4dotSearchPaths  = cfg.De4dotSearchPaths,
@@ -478,6 +495,10 @@ namespace dnSpy.MCP.Server.Application
                 Port               = cfg.Port,
                 ListenerMode       = cfg.ListenerMode,
                 ParsedListenerMode = Configuration.McpConfig.ToConfigValue(cfg.GetListenerMode()),
+                ToolCatalogMode    = cfg.ToolCatalogMode,
+                ParsedToolCatalogMode = Configuration.McpConfig.ToConfigValue(cfg.GetToolCatalogMode()),
+                DisabledTools      = cfg.DisabledTools,
+                ClientToolPolicies = cfg.ClientToolPolicies,
                 RestartRequiredForListenerChanges = true,
                 De4dotExePath      = cfg.De4dotExePath,
                 De4dotSearchPaths  = cfg.De4dotSearchPaths,
