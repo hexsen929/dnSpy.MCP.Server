@@ -76,13 +76,23 @@ jobs:
       - name: Package build output
         shell: pwsh
         run: |
-          $dll = Get-ChildItem dnspy-src -Recurse -Filter 'dnSpy.MCP.Server.x.dll' |
+          $allDlls = Get-ChildItem dnspy-src -Recurse -Filter 'dnSpy.MCP.Server.x.dll'
+          $dll = $allDlls |
             Where-Object { $_.FullName -match [regex]::Escape("${{ matrix.target_framework }}") } |
+            Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
+
+          if (-not $dll) {
+            $dll = $allDlls |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 1
+          }
 
           if (-not $dll) {
             throw "dnSpy.MCP.Server.x.dll for target ${{ matrix.target_framework }} was not found."
           }
+
+          Write-Host "Packaging MCP DLL from: $($dll.FullName)"
 
           $outDir = $dll.Directory.FullName
           $artifactDir = Join-Path $PWD "artifacts/${{ matrix.target_framework }}"

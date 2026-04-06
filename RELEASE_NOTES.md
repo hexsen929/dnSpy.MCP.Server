@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.12 — 2026-04-06
+
+### Fixed: older dnSpyEx output-path packaging
+
+- GitHub Actions packaging now falls back to the newest built `dnSpy.MCP.Server.x.dll` when the output path does not include the target framework name
+- this fixes the failed `v1.8.11` release packaging on `dnSpyEx/dnSpy@v6.5.1`
+- release binaries remain pinned to the official `v6.5.1` host / `dnlib 4.4.0`
+
+---
+
 ## v1.8.11 — 2026-04-06
 
 ### Fixed: build against the official dnSpyEx 6.5.1 host

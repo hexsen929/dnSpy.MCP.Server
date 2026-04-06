@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.12] - 2026-04-06
+
+### Fixed
+- GitHub Actions packaging now falls back to the newest built `dnSpy.MCP.Server.x.dll` when older dnSpyEx tags do not place the target framework name in the output path, fixing the failed `v1.8.11` packaging/release jobs.
+- Keeps the `dnSpyEx/dnSpy@v6.5.1` pin from `v1.8.11`, so released binaries still target the official `dnSpy-netframework` host with `dnlib 4.4.0`.
+
 ## [1.8.11] - 2026-04-06
 
 ### Fixed
