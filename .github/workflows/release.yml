@@ -9,21 +9,18 @@ on:
 jobs:
   release:
     runs-on: windows-latest
-    continue-on-error: ${{ matrix.allow_failure }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - target_framework: net10.0-windows
             dnspy_ref: master
-            host_package: dnSpy-net-win64.zip
+            host_package: source-built dnSpyEx master host
             host_line: primary
-            allow_failure: false
           - target_framework: net48
-            dnspy_ref: v6.5.1
-            host_package: dnSpy-netframework.zip
+            dnspy_ref: master
+            host_package: source-built dnSpyEx master host
             host_line: compatibility
-            allow_failure: true
 
     steps:
       - name: Checkout extension repository

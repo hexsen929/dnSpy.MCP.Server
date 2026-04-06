@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.20 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.21 | **Tools**: 137 default / 143 full | **Resources**: 6 | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -103,13 +103,13 @@ The MCP server does **not** port HoLLy UI, MSAGL, AsmResolver backends, or symbo
 
 > **de4dot integration** — de4dot libraries are bundled in `libs/de4dot/` (net48) and `libs/de4dot-net8/` (net8/net10). No external dependencies required; all deobfuscation tools are available in both build targets.
 
-### Host package compatibility
+### Supported build lines
 
-| dnSpy host package | Plugin target | Status | Notes |
+| Build baseline | Plugin target | Status | Notes |
 |---|---:|---|---|
-| `dnSpy-net-win64.zip` | `net10.0-windows` | **Primary / recommended** | Mainline path for modern 64-bit Windows installs. This is the default line we optimize for first. |
-| `dnSpy-netframework.zip` | `net48` | Compatibility | Kept for older / legacy host deployments. Must stay aligned with dnSpyEx `v6.5.1` and its `dnlib 4.4.0`. Compatibility builds are best-effort and no longer block the primary win64 release path. |
-| `dnSpy-net-win32.zip` | not primary in this repo | Legacy x86 host | Not the default path for this project. Use only if you explicitly need a 32-bit host. |
+| `dnSpyEx/dnSpy@master` source tree | `net10.0-windows` | **Primary / recommended** | Mainline path. Build the host and extension from the same source baseline. |
+| `dnSpyEx/dnSpy@master` source tree | `net48` | Compatibility | Still built from the same source baseline as the primary line; kept to preserve the upstream dual-target model. |
+| Official prebuilt release zips | not authoritative for current source line | Best-effort only | Public release zip hosts may lag the current source baseline. Use them only if you explicitly choose a release-aligned deployment path. |
 
 ### Clone & Restore
 
@@ -160,21 +160,28 @@ dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release --no
 
 ### Recommended Windows deployment
 
-The safest deployment flow for the **primary `net10.0-windows` / `dnSpy-net-win64.zip` line** is:
+The source-first deployment flow is:
 
-1. unpack a **clean official dnSpyEx `dnSpy-net-win64.zip`** release into a new directory
-2. copy the contents of the MCP **`net10.0-windows` plugin-only bundle** into dnSpy's `bin` directory
-3. keep `dnSpy.exe`, `dnSpy.exe.config`, and the rest of the host tree from the clean dnSpy release
-4. launch dnSpy from a **local Windows drive** such as `C:\\dnSpy-net-win64\\dnSpy.exe`
+1. clone **`dnSpyEx/dnSpy`** and checkout the source baseline you want to use
+2. overlay this extension into `Extensions/dnSpy.MCP.Server`
+3. build the host and extension from the **same source tree**
+4. launch the resulting dnSpy build from a **local Windows drive**
 
-### Compatibility deployment (`net48`)
+For the primary line, that means:
 
-The safest deployment flow for the `net48` compatibility build is:
+```bash
+git clone https://github.com/dnSpyEx/dnSpy --recursive
+cd dnSpy
+dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net10.0-windows
+```
 
-1. unpack a **clean official dnSpyEx netframework** release into a new directory
-2. copy the contents of the MCP **plugin-only bundle** into dnSpy's `bin` directory
-3. keep `dnSpy.exe`, `dnSpy.exe.config`, and the rest of the host tree from the clean dnSpy release
-4. launch dnSpy from a **local Windows drive** such as `C:\\dnSpy-netframework\\dnSpy.exe`
+For the compatibility line:
+
+```bash
+dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net48
+```
+
+If you instead deploy into an **official prebuilt** dnSpy zip, treat that as a separate release-aligned path and verify the host runtime/dependency baseline before assuming it matches the current source branch.
 
 Do **not**:
 

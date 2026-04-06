@@ -2,6 +2,17 @@
 
 ---
 
+## v1.8.21 — 2026-04-07
+
+### Changed: back to the upstream source-first baseline
+
+- both `net10.0-windows` and `net48` now build against `dnSpyEx/dnSpy@master`
+- docs now distinguish clearly between:
+  - the **source-first** baseline used by upstream
+  - older **official prebuilt zip** hosts, which may lag the current source branch
+
+---
+
 ## v1.8.20 — 2026-04-07
 
 ### Changed: primary win64 release is no longer blocked by net48

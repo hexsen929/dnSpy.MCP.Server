@@ -5,10 +5,10 @@
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>dnSpy.MCP.StdioProxy</AssemblyName>
     <RootNamespace>dnSpy.MCP.StdioProxy</RootNamespace>
-    <Version>1.8.20</Version>
-    <AssemblyVersion>1.8.20.0</AssemblyVersion>
-    <FileVersion>1.8.20.0</FileVersion>
-    <InformationalVersion>1.8.20</InformationalVersion>
+    <Version>1.8.21</Version>
+    <AssemblyVersion>1.8.21.0</AssemblyVersion>
+    <FileVersion>1.8.21.0</FileVersion>
+    <InformationalVersion>1.8.21</InformationalVersion>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
