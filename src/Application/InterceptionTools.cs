@@ -29,15 +29,17 @@ using dnSpy.Contracts.Debugger;
 using dnSpy.Contracts.Debugger.Breakpoints.Code;
 using dnSpy.Contracts.Debugger.CallStack;
 using dnSpy.Contracts.Debugger.DotNet.Breakpoints.Code;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.Contracts.Metadata;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 
 namespace dnSpy.MCP.Server.Application {
 	[Export(typeof(InterceptionTools))]
 	public sealed class InterceptionTools {
 		readonly Lazy<DbgDotNetBreakpointFactory> breakpointFactory;
-		readonly IDocumentTreeView documentTreeView;
+		readonly IDsDocumentService documentService;
 
 		static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions {
 			WriteIndented = true,
@@ -46,9 +48,9 @@ namespace dnSpy.MCP.Server.Application {
 		static readonly ConcurrentDictionary<string, InterceptorSession> Sessions = new ConcurrentDictionary<string, InterceptorSession>(StringComparer.OrdinalIgnoreCase);
 
 		[ImportingConstructor]
-		public InterceptionTools(Lazy<DbgDotNetBreakpointFactory> breakpointFactory, IDocumentTreeView documentTreeView) {
+		public InterceptionTools(Lazy<DbgDotNetBreakpointFactory> breakpointFactory, IDsDocumentService documentService) {
 			this.breakpointFactory = breakpointFactory;
-			this.documentTreeView = documentTreeView;
+			this.documentService = documentService;
 		}
 
 		public CallToolResult TraceMethod(Dictionary<string, object>? arguments) =>
@@ -299,18 +301,7 @@ namespace dnSpy.MCP.Server.Application {
 		}
 
 		AssemblyDef? FindAssemblyByName(string name, string? filePath = null) {
-			if (!string.IsNullOrEmpty(filePath)) {
-				string normalized = filePath!.Replace('/', '\\');
-				var byPath = documentTreeView.GetAllModuleNodes()
-					.FirstOrDefault(m => (m.Document?.Filename ?? string.Empty).Replace('/', '\\')
-						.Equals(normalized, StringComparison.OrdinalIgnoreCase));
-				if (byPath?.Document?.AssemblyDef != null)
-					return byPath.Document.AssemblyDef;
-			}
-
-			return documentTreeView.GetAllModuleNodes()
-				.Select(m => m.Document?.AssemblyDef)
-				.FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+			return LoadedDocumentsHelper.FindAssembly(documentService, name, filePath);
 		}
 
 		static TypeDef? FindTypeInAssembly(AssemblyDef assembly, string fullName) =>

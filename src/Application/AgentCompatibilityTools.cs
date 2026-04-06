@@ -135,6 +135,12 @@ namespace dnSpy.MCP.Server.Application {
 				EnsureSourcePatchIsSupported(type, method);
 				EnsureEditableMethod(method);
 
+				var targetFramework = GetTargetFrameworkMoniker(method.Module);
+				if (IsModernTargetFramework(targetFramework) && IsNetFrameworkHost()) {
+					var frameworkText = string.IsNullOrWhiteSpace(targetFramework) ? "modern .NET target" : targetFramework;
+					return Error($"update_method_sourcecode cannot compile patches for '{frameworkText}' from the net48 host. Use the net10.0-windows build of the plugin for .NET 5+ / net8 / net10 assemblies.");
+				}
+
 				var wrapperSource = BuildWrapperSource(type, method, source);
 				var compileResult = CompileMethodBody(type, method, wrapperSource);
 				if (!compileResult.Success || compileResult.CompiledMethod == null) {
@@ -590,20 +596,30 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 
 		List<MetadataReference> BuildCompilationReferences(ModuleDef targetModule) {
 			var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var targetFramework = GetTargetFrameworkMoniker(targetModule);
+			var modernTarget = IsModernTargetFramework(targetFramework);
 
 			void AddPath(string? path) {
 				if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
 					paths.Add(path!);
 			}
 
-			AddPath(typeof(object).Assembly.Location);
-			AddPath(typeof(Enumerable).Assembly.Location);
-			AddPath(typeof(Uri).Assembly.Location);
-			AddPath(typeof(System.Runtime.GCSettings).Assembly.Location);
-			AddPath(typeof(System.Threading.Tasks.Task).Assembly.Location);
-			AddPath(typeof(System.Threading.CancellationToken).Assembly.Location);
+			if (modernTarget) {
+				AddTrustedPlatformAssemblyReferences(paths);
+				AddDotNetReferencePack(paths, targetFramework);
+			}
+			else {
+				AddPath(typeof(object).Assembly.Location);
+				AddPath(typeof(Enumerable).Assembly.Location);
+				AddPath(typeof(Uri).Assembly.Location);
+				AddPath(typeof(System.Runtime.GCSettings).Assembly.Location);
+				AddPath(typeof(System.Threading.Tasks.Task).Assembly.Location);
+				AddPath(typeof(System.Threading.CancellationToken).Assembly.Location);
+			}
 
 			foreach (var document in LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)) {
+				if (modernTarget && IsFrameworkAssemblyName(document.AssemblyDef?.Name.String))
+					continue;
 				AddPath(document.Filename);
 				try {
 					AddPath(document.ModuleDef?.Location);
@@ -621,6 +637,107 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			return paths
 				.Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
 				.ToList();
+		}
+
+		static bool IsNetFrameworkHost() =>
+			string.Equals(typeof(object).Assembly.GetName().Name, "mscorlib", StringComparison.OrdinalIgnoreCase);
+
+		static string? GetTargetFrameworkMoniker(ModuleDef module) =>
+			module.Assembly == null ? null : GetTargetFrameworkMoniker(module.Assembly);
+
+		static string? GetTargetFrameworkMoniker(AssemblyDef assembly) {
+			var attribute = assembly.CustomAttributes.FirstOrDefault(a =>
+				string.Equals(a.AttributeType.FullName, "System.Runtime.Versioning.TargetFrameworkAttribute", StringComparison.Ordinal));
+			return attribute?.ConstructorArguments.Count > 0
+				? attribute.ConstructorArguments[0].Value?.ToString()
+				: null;
+		}
+
+		static bool IsModernTargetFramework(string? targetFrameworkMoniker) {
+			if (string.IsNullOrWhiteSpace(targetFrameworkMoniker))
+				return false;
+
+			return targetFrameworkMoniker.StartsWith(".NETCoreApp", StringComparison.OrdinalIgnoreCase) ||
+				targetFrameworkMoniker.StartsWith(".NET,Version=", StringComparison.OrdinalIgnoreCase);
+		}
+
+		static bool IsFrameworkAssemblyName(string? assemblyName) {
+			if (string.IsNullOrWhiteSpace(assemblyName))
+				return false;
+
+			return assemblyName.Equals("mscorlib", StringComparison.OrdinalIgnoreCase) ||
+				assemblyName.Equals("netstandard", StringComparison.OrdinalIgnoreCase) ||
+				assemblyName.Equals("System", StringComparison.OrdinalIgnoreCase) ||
+				assemblyName.Equals("System.Core", StringComparison.OrdinalIgnoreCase) ||
+				assemblyName.Equals("System.Private.CoreLib", StringComparison.OrdinalIgnoreCase) ||
+				assemblyName.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+				assemblyName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase);
+		}
+
+		static void AddTrustedPlatformAssemblyReferences(HashSet<string> paths) {
+			if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is not string tpa || string.IsNullOrWhiteSpace(tpa))
+				return;
+
+			foreach (var path in tpa.Split(Path.PathSeparator)) {
+				if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+					paths.Add(path);
+			}
+		}
+
+		static void AddDotNetReferencePack(HashSet<string> paths, string? targetFrameworkMoniker) {
+			var shortTfm = GetShortTargetFrameworkMoniker(targetFrameworkMoniker);
+			if (string.IsNullOrWhiteSpace(shortTfm))
+				return;
+
+			foreach (var root in GetDotNetRootCandidates()) {
+				var packRoot = Path.Combine(root, "packs", "Microsoft.NETCore.App.Ref");
+				if (!Directory.Exists(packRoot))
+					continue;
+
+				var versionDirectories = Directory.GetDirectories(packRoot)
+					.Select(path => new {
+						Path = path,
+						Name = Path.GetFileName(path),
+						Version = Version.TryParse(Path.GetFileName(path), out var parsed) ? parsed : new Version(0, 0)
+					})
+					.OrderByDescending(item => item.Version)
+					.ToList();
+
+				foreach (var versionDirectory in versionDirectories) {
+					var refDir = Path.Combine(versionDirectory.Path, "ref", shortTfm);
+					if (!Directory.Exists(refDir))
+						continue;
+
+					foreach (var path in Directory.GetFiles(refDir, "*.dll"))
+						paths.Add(path);
+					return;
+				}
+			}
+		}
+
+		static string? GetShortTargetFrameworkMoniker(string? targetFrameworkMoniker) {
+			if (string.IsNullOrWhiteSpace(targetFrameworkMoniker))
+				return null;
+
+			var match = Regex.Match(targetFrameworkMoniker, @"Version=v(?<version>\d+\.\d+)", RegexOptions.IgnoreCase);
+			if (!match.Success)
+				return null;
+
+			return "net" + match.Groups["version"].Value;
+		}
+
+		static IEnumerable<string> GetDotNetRootCandidates() {
+			string?[] candidates = new[] {
+				Environment.GetEnvironmentVariable("DOTNET_ROOT"),
+				Environment.GetEnvironmentVariable("DOTNET_ROOT(x86)"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "dotnet"),
+			};
+
+			return candidates
+				.Where(path => !string.IsNullOrWhiteSpace(path))
+				.Select(path => path!)
+				.Distinct(StringComparer.OrdinalIgnoreCase);
 		}
 
 		CilBody CloneMethodBodyIntoTarget(TypeDef sourceType, MethodDef sourceMethod, TypeDef targetType, MethodDef targetMethod) {

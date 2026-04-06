@@ -291,21 +291,20 @@ namespace dnSpy.MCP.Server.Application
                 // When file_path is omitted, prefer the module whose Filename matches the
                 // assembly_name hint — this avoids picking the wrong entry when two assemblies
                 // share the same internal name (e.g. packed original + unpacked copy).
-                var moduleNode = System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                    documentTreeView.GetAllModuleNodes()
-                        .Where(m => m.Document?.AssemblyDef != null &&
-                            m.Document.AssemblyDef.Name.String.Equals(assemblyName, StringComparison.OrdinalIgnoreCase))
-                        .OrderByDescending(m => {
-                            // Prefer the node whose file name contains the assembly_name hint
-                            var fn = System.IO.Path.GetFileNameWithoutExtension(m.Document?.Filename ?? "");
-                            return fn.IndexOf(assemblyName, StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0;
-                        })
-                        .FirstOrDefault());
+                var matchingDoc = LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)
+                    .Where(d => d.AssemblyDef != null &&
+                        d.AssemblyDef.Name.String.Equals(assemblyName, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(d => {
+                        // Prefer the document whose file name contains the assembly_name hint
+                        var fn = System.IO.Path.GetFileNameWithoutExtension(d.Filename ?? "");
+                        return fn.IndexOf(assemblyName, StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0;
+                    })
+                    .FirstOrDefault();
 
-                if (moduleNode == null)
+                if (matchingDoc == null)
                     throw new ArgumentException($"Assembly not found: {assemblyName}. If you have multiple files with the same internal name, use file_path instead.");
 
-                filePath = moduleNode.Document?.Filename;
+                filePath = matchingDoc.Filename;
                 if (string.IsNullOrEmpty(filePath) || !System.IO.File.Exists(filePath))
                     throw new ArgumentException(
                         $"File not found on disk: {filePath ?? "(null)"}. " +

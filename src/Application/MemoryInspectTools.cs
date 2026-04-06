@@ -24,6 +24,7 @@ using System.Linq;
 using System.Text.Json;
 using dnlib.DotNet;
 using dnSpy.Contracts.Debugger;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.Contracts.Debugger.DotNet.Evaluation;
 using dnSpy.Contracts.Debugger.Evaluation;
@@ -39,16 +40,16 @@ namespace dnSpy.MCP.Server.Application {
 	public sealed class MemoryInspectTools {
 		readonly Lazy<DbgManager> dbgManager;
 		readonly Lazy<DbgLanguageService> languageService;
-		readonly IDocumentTreeView documentTreeView;
+		readonly IDsDocumentService documentService;
 
 		[ImportingConstructor]
 		public MemoryInspectTools(
 			Lazy<DbgManager> dbgManager,
 			Lazy<DbgLanguageService> languageService,
-			IDocumentTreeView documentTreeView) {
+			IDsDocumentService documentService) {
 			this.dbgManager = dbgManager;
 			this.languageService = languageService;
-			this.documentTreeView = documentTreeView;
+			this.documentService = documentService;
 		}
 
 		// ── get_local_variables ──────────────────────────────────────────────────
@@ -386,11 +387,7 @@ namespace dnSpy.MCP.Server.Application {
 			if (string.IsNullOrWhiteSpace(moduleFile) || token == 0)
 				return null;
 
-			var assembly = documentTreeView.GetAllModuleNodes()
-				.Select(m => m.Document?.AssemblyDef)
-				.FirstOrDefault(a => a != null && a.Modules.Any(mod =>
-					string.Equals(mod.Location, moduleFile, StringComparison.OrdinalIgnoreCase) ||
-					string.Equals(mod.Name, frame.Module?.Name, StringComparison.OrdinalIgnoreCase)));
+			var assembly = LoadedDocumentsHelper.FindAssemblyByModule(documentService, moduleFile, frame.Module?.Name);
 			if (assembly == null)
 				return null;
 

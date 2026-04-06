@@ -23,8 +23,10 @@ using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text.Json;
 using dnlib.DotNet;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 
 namespace dnSpy.MCP.Server.Application
 {
@@ -35,12 +37,12 @@ namespace dnSpy.MCP.Server.Application
     [Export(typeof(CodeAnalysisHelpers))]
     public sealed class CodeAnalysisHelpers
     {
-        private readonly IDocumentTreeView documentTreeView;
+        private readonly IDsDocumentService documentService;
 
         [ImportingConstructor]
-        public CodeAnalysisHelpers(IDocumentTreeView documentTreeView)
+        public CodeAnalysisHelpers(IDsDocumentService documentService)
         {
-            this.documentTreeView = documentTreeView ?? throw new ArgumentNullException(nameof(documentTreeView));
+            this.documentService = documentService ?? throw new ArgumentNullException(nameof(documentService));
         }
 
         /// <summary>
@@ -192,11 +194,7 @@ namespace dnSpy.MCP.Server.Application
         public Dictionary<string, List<string>> ComputeAssemblyDependencies()
         {
             var result = new Dictionary<string, List<string>>();
-            var assemblies = documentTreeView.GetAllModuleNodes()
-                .Select(m => m.Document?.AssemblyDef)
-                .Where(a => a != null)
-                .Distinct()
-                .ToList();
+            var assemblies = LoadedDocumentsHelper.GetAssembliesSnapshot(documentService);
 
             foreach (var assembly in assemblies)
             {
@@ -502,9 +500,7 @@ namespace dnSpy.MCP.Server.Application
         // ── Private lookup helpers ───────────────────────────────────────────────
 
         private AssemblyDef? FindAssemblyByName(string name) =>
-            documentTreeView.GetAllModuleNodes()
-                .Select(m => m.Document?.AssemblyDef)
-                .FirstOrDefault(a => a?.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase) == true);
+            LoadedDocumentsHelper.FindAssembly(documentService, name);
 
         private TypeDef? FindTypeInAssembly(AssemblyDef asm, string typeName) =>
             asm.Modules

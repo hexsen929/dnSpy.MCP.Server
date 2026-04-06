@@ -23,8 +23,10 @@ using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text.Json;
 using dnlib.DotNet;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 using System.Text.Json.Serialization;
 
 namespace dnSpy.MCP.Server.Application
@@ -36,12 +38,12 @@ namespace dnSpy.MCP.Server.Application
     [Export(typeof(UsageFindingCommandTools))]
     public sealed class UsageFindingCommandTools
     {
-        private readonly IDocumentTreeView documentTreeView;
+        private readonly IDsDocumentService documentService;
 
         [ImportingConstructor]
-        public UsageFindingCommandTools(IDocumentTreeView documentTreeView)
+        public UsageFindingCommandTools(IDsDocumentService documentService)
         {
-            this.documentTreeView = documentTreeView ?? throw new ArgumentNullException(nameof(documentTreeView));
+            this.documentService = documentService ?? throw new ArgumentNullException(nameof(documentService));
         }
 
         /// <summary>
@@ -75,9 +77,7 @@ namespace dnSpy.MCP.Server.Application
         /// </summary>
         private IEnumerable<MethodDef> GetAllMethodDefinitions()
         {
-            return documentTreeView.GetAllModuleNodes()
-                .Select(m => m.Document?.AssemblyDef)
-                .Where(a => a != null)
+            return LoadedDocumentsHelper.GetAssembliesSnapshot(documentService)
                 .SelectMany(a => a!.Modules)
                 .SelectMany(m => GetAllTypesRecursive(m))
                 .SelectMany(t => t.Methods)
@@ -185,9 +185,7 @@ namespace dnSpy.MCP.Server.Application
         {
             var usages = new List<(string, string, string)>();
 
-            foreach (var assembly in documentTreeView.GetAllModuleNodes()
-                .Select(m => m.Document?.AssemblyDef)
-                .Where(a => a != null))
+            foreach (var assembly in LoadedDocumentsHelper.GetAssembliesSnapshot(documentService))
             {
                 var assemblyName = assembly!.Name.String;
 
@@ -401,9 +399,7 @@ namespace dnSpy.MCP.Server.Application
         // ── Private lookup helpers ───────────────────────────────────────────────
 
         private AssemblyDef? FindAssemblyByName(string name) =>
-            documentTreeView.GetAllModuleNodes()
-                .Select(m => m.Document?.AssemblyDef)
-                .FirstOrDefault(a => a?.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase) == true);
+            LoadedDocumentsHelper.FindAssembly(documentService, name);
 
         private IEnumerable<TypeDef> GetAllAssemblyTypes(AssemblyDef asm) =>
             asm.Modules.SelectMany(m => GetAllTypesRecursive(m));

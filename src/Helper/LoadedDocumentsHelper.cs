@@ -13,14 +13,6 @@ namespace dnSpy.MCP.Server.Helper
             if (documentService == null)
                 throw new ArgumentNullException(nameof(documentService));
 
-            if (System.Windows.Application.Current?.Dispatcher != null)
-            {
-                return System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                    documentService.GetDocuments()
-                        .Where(d => d != null)
-                        .ToList());
-            }
-
             return documentService.GetDocuments()
                 .Where(d => d != null)
                 .ToList();
@@ -50,6 +42,24 @@ namespace dnSpy.MCP.Server.Helper
             return docs
                 .Select(d => d.AssemblyDef)
                 .FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public static AssemblyDef? FindAssemblyByModule(IDsDocumentService documentService, string? moduleFilePath, string? moduleName = null)
+        {
+            if (string.IsNullOrWhiteSpace(moduleFilePath) && string.IsNullOrWhiteSpace(moduleName))
+                return null;
+
+            string? normalizedPath = string.IsNullOrWhiteSpace(moduleFilePath)
+                ? null
+                : moduleFilePath!.Replace('/', '\\');
+
+            return GetAssembliesSnapshot(documentService)
+                .FirstOrDefault(assembly => assembly.Modules.Any(module =>
+                    (!string.IsNullOrWhiteSpace(normalizedPath) &&
+                     !string.IsNullOrWhiteSpace(module.Location) &&
+                     module.Location.Replace('/', '\\').Equals(normalizedPath, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrWhiteSpace(moduleName) &&
+                     string.Equals(module.Name.String, moduleName, StringComparison.OrdinalIgnoreCase))));
         }
 
         public static List<TypeDef> GetAllTypesSnapshot(IDsDocumentService documentService)

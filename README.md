@@ -96,27 +96,27 @@ The MCP server does **not** port HoLLy UI, MSAGL, AsmResolver backends, or symbo
 
 | Requirement | Version |
 |-------------|---------|
-| .NET SDK | 8.0+ (for net8.0-windows target) |
+| .NET SDK | 10.0+ (for net10.0-windows target) |
 | .NET Framework SDK | 4.8 (for net48 target) |
 | OS | Windows (WPF dependency) |
-| dnSpy | dnSpyEx `v6.5.1` recommended for release-aligned builds |
+| dnSpy | dnSpyEx `master` recommended; targets align with upstream `net10.0-windows + net48` |
 
-> **de4dot integration** — de4dot libraries are bundled in `libs/de4dot/` (net48) and `libs/de4dot-net8/` (net8/net10). No external dependencies required; all deobfuscation tools are available in both build targets.
+> **de4dot integration** — de4dot libraries are bundled in `libs/de4dot/` (net48) and `libs/de4dot-net8/` (modern .NET build assets currently reused for net10). No external dependencies required; all deobfuscation tools are available in both build targets.
 
 ### Supported build lines
 
 | Build baseline | Plugin target | Status | Notes |
 |---|---:|---|---|
-| `dnSpyEx/dnSpy@v6.5.1` source tree | `net8.0-windows` | **Primary / recommended** | Matches the official `dnSpy-net-win64` host line. |
-| `dnSpyEx/dnSpy@v6.5.1` source tree | `net48` | Compatibility | Matches the official `dnSpy-netframework` host line. |
-| Official `v6.5.1` prebuilt release zips | matching target package | Supported | Use the `net8.0-windows` package for `dnSpy-net-win64` and the `net48` package for `dnSpy-netframework`. |
+| `dnSpyEx/dnSpy@master` source tree | `net10.0-windows` | **Primary / recommended** | Matches the upstream modern win64 host line. |
+| `dnSpyEx/dnSpy@master` source tree | `net48` | Compatibility | Preserves the .NET Framework host line. |
+| Prebuilt release zip from this repo | matching target package | Supported | Extract into dnSpy `bin` so the result is `bin/Extensions/dnSpy.MCP.Server/*`. |
 
 ### Clone & Restore
 
 ```bash
 git clone https://github.com/dnSpyEx/dnSpy --recursive
 cd dnSpy
-git checkout v6.5.1
+git checkout master
 git submodule update --init --recursive
 ```
 
@@ -133,7 +133,7 @@ dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release
 dotnet build dnSpy.sln -c Debug
 
 # Build for a specific target framework only
-dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net8.0-windows
+dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net10.0-windows
 dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net48
 
 # Restore NuGet packages without building
@@ -147,7 +147,7 @@ dotnet clean Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj
 
 | Target | Output path |
 |--------|-------------|
-| .NET 8.0-windows | `dnSpy/dnSpy/bin/Release/net8.0-windows/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.x.dll` |
+| .NET 10.0-windows | `dnSpy/dnSpy/bin/Release/net10.0-windows/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.x.dll` |
 | .NET Framework 4.8 | `dnSpy/dnSpy/bin/Release/net48/Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.x.dll` |
 
 > The MCP Server now builds straight into dnSpy's extension layout: `bin/Extensions/dnSpy.MCP.Server`.
@@ -175,9 +175,9 @@ For the primary line, that means:
 ```bash
 git clone https://github.com/dnSpyEx/dnSpy --recursive
 cd dnSpy
-git checkout v6.5.1
+git checkout master
 git submodule update --init --recursive
-dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net8.0-windows
+dotnet build Extensions/dnSpy.MCP.Server/dnSpy.MCP.Server.csproj -c Release -f net10.0-windows
 ```
 
 For the compatibility line:
@@ -1167,7 +1167,7 @@ This means:
 
 ```
 dnSpy.MCP.Server/
-├── dnSpy.MCP.Server.csproj   # Multi-target via dnSpyEx baseline: net48 + net8.0-windows
+├── dnSpy.MCP.Server.csproj   # Multi-target via dnSpyEx baseline: net48 + net10.0-windows
 ├── CHANGELOG.md
 ├── README.md
 ├── RELEASE_NOTES.md

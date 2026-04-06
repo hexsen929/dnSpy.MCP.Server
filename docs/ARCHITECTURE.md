@@ -213,7 +213,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 - `SaveDeobfuscated()` - Return deobfuscated file as Base64
 - `RunDe4dot()` - Invoke `de4dot.exe` as external process
 
-**Note**: de4dot DLLs bundled locally (`libs/de4dot/` for net48, `libs/de4dot-net8/` for net8/net10). Available in both build targets.
+**Note**: de4dot DLLs bundled locally (`libs/de4dot/` for net48, `libs/de4dot-net8/` currently reused for net10). Available in both build targets.
 
 ---
 

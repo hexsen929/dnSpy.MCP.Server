@@ -2,6 +2,40 @@
 
 ---
 
+## v1.8.25 — 2026-04-07
+
+### Fixed: remaining document enumeration race/thread-safety issues
+
+- removed the last `GetAllModuleNodes()` lookup paths that were still using the WPF tree view as a data source
+- assembly/type/module lookup now consistently goes through `IDsDocumentService` + `LoadedDocumentsHelper`
+- this finishes the delayed-visibility / cross-thread cleanup for:
+  - usage finding
+  - code analysis helpers
+  - source map lookup
+  - MCP interop lookup
+  - interception lookup
+  - debugger lookup
+  - memory inspect method resolution
+  - malware analysis lookup
+  - control-flow lookup
+  - `scan_pe_strings` assembly-path fallback
+
+### Fixed: debugger/edit helper regressions
+
+- `get_method_by_token` now formats `RVA` correctly instead of throwing on `X8`
+- `batch_breakpoints` now accepts the MCP payload shapes clients actually send (`string[]`, object arrays, JSON strings, JSON objects)
+- `continue_debugger` / `break_debugger` no longer report fake success when no debug session exists
+- `start_debugging` now reports whether a debug session actually became visible shortly after the start request
+- `update_method_sourcecode` now fails early with a clear message when a net48 host tries to compile a patch for a modern `.NET` target assembly
+
+### Changed: build line realigned with upstream
+
+- dropped the ad-hoc `net8.0-windows` build line from this fork
+- build/release workflows now target upstream `dnSpyEx/dnSpy@master`
+- primary host line is back to `net10.0-windows`; compatibility line remains `net48`
+
+---
+
 ## v1.8.24 — 2026-04-07
 
 ### Fixed: official win64 line is back on .NET 8

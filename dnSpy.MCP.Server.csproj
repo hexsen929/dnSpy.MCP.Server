@@ -4,10 +4,10 @@
 
   <PropertyGroup>
     <AssemblyName>dnSpy.MCP.Server.x</AssemblyName>
-    <Version>1.8.24</Version>
-    <AssemblyVersion>1.8.24.0</AssemblyVersion>
-    <FileVersion>1.8.24.0</FileVersion>
-    <InformationalVersion>1.8.24</InformationalVersion>
+    <Version>1.8.25</Version>
+    <AssemblyVersion>1.8.25.0</AssemblyVersion>
+    <FileVersion>1.8.25.0</FileVersion>
+    <InformationalVersion>1.8.25</InformationalVersion>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>..\..\dnSpy.snk</AssemblyOriginatorKeyFile>
     <OutputPath>..\..\dnSpy\dnSpy\bin\$(Configuration)\$(TargetFramework)\Extensions\dnSpy.MCP.Server\</OutputPath>
@@ -31,35 +31,30 @@
 
   <!-- de4dot integration (deobfuscation engine) — DLLs bundled in libs/ -->
   <!-- net48 build uses libs/de4dot/ (net48 DLLs) -->
-  <!-- net8/net10 builds use libs/de4dot-net8/ -->
+  <!-- net10 build uses libs/de4dot-net8/ until the bundle directory is renamed -->
   <ItemGroup>
     <Reference Include="de4dot.code">
       <HintPath Condition=" '$(TargetFramework)' == 'net48' ">$(MSBuildThisFileDirectory)libs\de4dot\de4dot.code.dll</HintPath>
-      <HintPath Condition=" '$(TargetFramework)' == 'net8.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.code.dll</HintPath>
       <HintPath Condition=" '$(TargetFramework)' == 'net10.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.code.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="de4dot.blocks">
       <HintPath Condition=" '$(TargetFramework)' == 'net48' ">$(MSBuildThisFileDirectory)libs\de4dot\de4dot.blocks.dll</HintPath>
-      <HintPath Condition=" '$(TargetFramework)' == 'net8.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.blocks.dll</HintPath>
       <HintPath Condition=" '$(TargetFramework)' == 'net10.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.blocks.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="de4dot.mdecrypt">
       <HintPath Condition=" '$(TargetFramework)' == 'net48' ">$(MSBuildThisFileDirectory)libs\de4dot\de4dot.mdecrypt.dll</HintPath>
-      <HintPath Condition=" '$(TargetFramework)' == 'net8.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.mdecrypt.dll</HintPath>
       <HintPath Condition=" '$(TargetFramework)' == 'net10.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.mdecrypt.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="de4dot.cui">
       <HintPath Condition=" '$(TargetFramework)' == 'net48' ">$(MSBuildThisFileDirectory)libs\de4dot\de4dot.cui.dll</HintPath>
-      <HintPath Condition=" '$(TargetFramework)' == 'net8.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.cui.dll</HintPath>
       <HintPath Condition=" '$(TargetFramework)' == 'net10.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\de4dot.cui.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="AssemblyData">
       <HintPath Condition=" '$(TargetFramework)' == 'net48' ">$(MSBuildThisFileDirectory)libs\de4dot\AssemblyData.dll</HintPath>
-      <HintPath Condition=" '$(TargetFramework)' == 'net8.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\AssemblyData.dll</HintPath>
       <HintPath Condition=" '$(TargetFramework)' == 'net10.0-windows' ">$(MSBuildThisFileDirectory)libs\de4dot-net8\AssemblyData.dll</HintPath>
       <Private>true</Private>
     </Reference>

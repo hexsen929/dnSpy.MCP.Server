@@ -24,8 +24,10 @@ using System.Linq;
 using System.Text.Json;
 using dnlib.DotNet;
 using dnlib.DotNet.Emit;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 using Echo.ControlFlow;
 using Echo.Platforms.Dnlib;
 
@@ -34,12 +36,12 @@ namespace dnSpy.MCP.Server.Application
     [Export(typeof(ControlFlowTools))]
     public sealed class ControlFlowTools
     {
-        readonly IDocumentTreeView documentTreeView;
+        readonly IDsDocumentService documentService;
 
         [ImportingConstructor]
-        public ControlFlowTools(IDocumentTreeView documentTreeView)
+        public ControlFlowTools(IDsDocumentService documentService)
         {
-            this.documentTreeView = documentTreeView ?? throw new ArgumentNullException(nameof(documentTreeView));
+            this.documentService = documentService ?? throw new ArgumentNullException(nameof(documentService));
         }
 
         public CallToolResult GetControlFlowGraph(Dictionary<string, object>? arguments)
@@ -226,11 +228,7 @@ namespace dnSpy.MCP.Server.Application
         }
 
         AssemblyDef? FindAssemblyByName(string name) =>
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                documentTreeView.GetAllModuleNodes()
-                    .Select(node => node.Document?.AssemblyDef)
-                    .FirstOrDefault(assembly => assembly != null &&
-                        assembly.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase)));
+            LoadedDocumentsHelper.FindAssembly(documentService, name);
 
         TypeDef? FindTypeInAssembly(AssemblyDef assembly, string fullName) =>
             assembly.Modules

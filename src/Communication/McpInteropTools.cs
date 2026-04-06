@@ -25,6 +25,7 @@ using System.Text.Json;
 using System.Text;
 using System.IO;
 using dnlib.DotNet;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.Tabs.DocViewer;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
@@ -39,12 +40,12 @@ namespace dnSpy.MCP.Server.Communication
     [Export(typeof(IMcpInteropTools))]
     public sealed class McpInteropTools : IMcpInteropTools
     {
-        readonly IDocumentTreeView documentTreeView;
+        readonly IDsDocumentService documentService;
 
         [ImportingConstructor]
-        public McpInteropTools(IDocumentTreeView documentTreeView)
+        public McpInteropTools(IDsDocumentService documentService)
         {
-            this.documentTreeView = documentTreeView;
+            this.documentService = documentService;
         }
 
         /// <summary>
@@ -431,9 +432,7 @@ namespace dnSpy.MCP.Server.Communication
 
         AssemblyDef? FindAssemblyByName(string name)
         {
-            return documentTreeView.GetAllModuleNodes()
-                .Select(m => m.Document?.AssemblyDef)
-                .FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+            return LoadedDocumentsHelper.FindAssembly(documentService, name);
         }
     }
 }

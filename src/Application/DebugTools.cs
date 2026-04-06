@@ -32,6 +32,7 @@ using dnSpy.Contracts.Debugger.DotNet.Breakpoints.Code;
 using dnSpy.Contracts.Debugger.DotNet.CorDebug;
 using dnSpy.Contracts.Debugger.Exceptions;
 using dnSpy.Contracts.Debugger.Steppers;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.Contracts.Metadata;
 using dnSpy.MCP.Server.Contracts;
@@ -48,7 +49,7 @@ namespace dnSpy.MCP.Server.Application {
 		readonly Lazy<DbgManager> dbgManager;
 		readonly Lazy<DbgCodeBreakpointsService> breakpointsService;
 		readonly Lazy<DbgDotNetBreakpointFactory> breakpointFactory;
-		readonly IDocumentTreeView documentTreeView;
+		readonly IDsDocumentService documentService;
 		readonly Lazy<AttachableProcessesService> attachableProcessesService;
 		readonly Lazy<DbgExceptionSettingsService> exceptionSettingsService;
 
@@ -57,13 +58,13 @@ namespace dnSpy.MCP.Server.Application {
 			Lazy<DbgManager> dbgManager,
 			Lazy<DbgCodeBreakpointsService> breakpointsService,
 			Lazy<DbgDotNetBreakpointFactory> breakpointFactory,
-			IDocumentTreeView documentTreeView,
+			IDsDocumentService documentService,
 			Lazy<AttachableProcessesService> attachableProcessesService,
 			Lazy<DbgExceptionSettingsService> exceptionSettingsService) {
 			this.dbgManager = dbgManager;
 			this.breakpointsService = breakpointsService;
 			this.breakpointFactory = breakpointFactory;
-			this.documentTreeView = documentTreeView;
+			this.documentService = documentService;
 			this.attachableProcessesService = attachableProcessesService;
 			this.exceptionSettingsService = exceptionSettingsService;
 		}
@@ -304,7 +305,7 @@ namespace dnSpy.MCP.Server.Application {
 				MethodName = method.Name.String,
 				Signature = method.FullName,
 				Token = $"0x{method.MDToken.Raw:X8}",
-				RVA = method.RVA == 0 ? null : $"0x{method.RVA:X8}",
+				RVA = method.RVA == 0 ? null : $"0x{(uint)method.RVA:X8}",
 				HasBody = method.HasBody,
 				IsStatic = method.IsStatic,
 				Parameters = method.Parameters
@@ -400,6 +401,8 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult ContinueDebugger() {
 			try {
+				if (!dbgManager.Value.IsDebugging || dbgManager.Value.Processes.Length == 0)
+					throw new InvalidOperationException("No active debug session.");
 				dbgManager.Value.RunAll();
 				return new CallToolResult {
 					Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed (RunAll called)." } }
@@ -416,6 +419,9 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult BreakDebugger(Dictionary<string, object>? arguments) {
 			try {
+				if (!dbgManager.Value.IsDebugging || dbgManager.Value.Processes.Length == 0)
+					throw new InvalidOperationException("No active debug session.");
+
 				bool safePause = false;
 				if (arguments != null && arguments.TryGetValue("safe_pause", out var spObj)) {
 					if (spObj is JsonElement spElem && (spElem.ValueKind == JsonValueKind.True || spElem.ValueKind == JsonValueKind.False))
@@ -572,14 +578,32 @@ namespace dnSpy.MCP.Server.Application {
 			};
 
 			var error = dbgManager.Value.Start(opts);
+			bool sessionCreated = false;
+			int processCount = 0;
+			if (error == null) {
+				var deadline = DateTime.UtcNow.AddMilliseconds(1200);
+				do {
+					processCount = dbgManager.Value.Processes.Length;
+					if (dbgManager.Value.IsDebugging && processCount > 0) {
+						sessionCreated = true;
+						break;
+					}
+
+					Thread.Sleep(100);
+				} while (DateTime.UtcNow < deadline);
+			}
 
 			var result = JsonSerializer.Serialize(new {
-				Started   = error == null,
-				ExePath   = exePath,
+				Started = error == null,
+				SessionCreated = sessionCreated,
+				ProcessCount = processCount,
+				ExePath = exePath,
 				BreakKind = breakKind,
-				Error     = error,
-				Note      = error == null
-					? "Process launched asynchronously. Use get_debugger_state to check when it is paused."
+				Error = error,
+				Note = error == null
+					? (sessionCreated
+						? "Debug session created. Use get_debugger_state / wait_for_pause to observe pause state."
+						: "Start request was accepted, but no debug session became visible within 1200 ms. The process may have exited immediately, failed before entry, or is still initializing.")
 					: null
 			}, new JsonSerializerOptions {
 				WriteIndented = true,
@@ -957,16 +981,7 @@ namespace dnSpy.MCP.Server.Application {
 	}
 
 	AssemblyDef? FindAssemblyByName(string name, string? filePath = null) {
-			if (!string.IsNullOrEmpty(filePath)) {
-				var normalized = filePath!.Replace('/', '\\');
-				var byPath = documentTreeView.GetAllModuleNodes()
-					.FirstOrDefault(m => (m.Document?.Filename ?? "").Replace('/', '\\')
-						.Equals(normalized, StringComparison.OrdinalIgnoreCase));
-				if (byPath?.Document?.AssemblyDef != null) return byPath.Document.AssemblyDef;
-			}
-			return documentTreeView.GetAllModuleNodes()
-				.Select(m => m.Document?.AssemblyDef)
-				.FirstOrDefault(a => a != null && a.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+			return LoadedDocumentsHelper.FindAssembly(documentService, name, filePath);
 		}
 
 		TypeDef? FindTypeInAssembly(AssemblyDef assembly, string fullName) =>
@@ -995,27 +1010,93 @@ namespace dnSpy.MCP.Server.Application {
 		}
 
 		List<BatchBreakpointItem> ParseBatchBreakpointItems(object itemsObj) {
+			if (itemsObj is System.Collections.IEnumerable enumerable && itemsObj is not string && itemsObj is not JsonElement) {
+				var result = new List<BatchBreakpointItem>();
+				foreach (var item in enumerable) {
+					switch (item) {
+					case null:
+						continue;
+					case string json when !string.IsNullOrWhiteSpace(json):
+						result.Add(ParseBatchBreakpointItemJson(json));
+						break;
+					case IReadOnlyDictionary<string, object> dict:
+						result.Add(ParseBatchBreakpointItemDictionary(dict));
+						break;
+					case IDictionary<string, object> dict:
+						result.Add(ParseBatchBreakpointItemDictionary(dict.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)));
+						break;
+					case IReadOnlyDictionary<string, string> stringDict:
+						result.Add(ParseBatchBreakpointItemDictionary(stringDict.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value)));
+						break;
+					case IDictionary<string, string> stringDict:
+						result.Add(ParseBatchBreakpointItemDictionary(stringDict.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value)));
+						break;
+					default:
+						throw new ArgumentException("Each batch breakpoint item must be an object or a JSON object string.");
+					}
+				}
+				return result;
+			}
+
 			if (itemsObj is JsonElement elem && elem.ValueKind == JsonValueKind.Array) {
 				var result = new List<BatchBreakpointItem>();
 				foreach (var item in elem.EnumerateArray()) {
-					if (item.ValueKind != JsonValueKind.Object)
+					if (item.ValueKind == JsonValueKind.String) {
+						var json = item.GetString();
+						if (!string.IsNullOrWhiteSpace(json))
+							result.Add(ParseBatchBreakpointItemJson(json!));
 						continue;
-					string? assemblyName = item.TryGetProperty("assembly_name", out var asm) ? asm.GetString() : null;
-					string? typeFullName = item.TryGetProperty("type_full_name", out var type) ? type.GetString() : null;
-					string? methodName = item.TryGetProperty("method_name", out var method) ? method.GetString() : null;
-					string? filePath = item.TryGetProperty("file_path", out var fp) ? fp.GetString() : null;
-					string? condition = item.TryGetProperty("condition", out var cond) ? cond.GetString() : null;
-					uint? ilOffset = null;
-					if (item.TryGetProperty("il_offset", out var il) && il.ValueKind == JsonValueKind.Number && il.TryGetUInt32(out var offset))
-						ilOffset = offset;
-					if (string.IsNullOrWhiteSpace(assemblyName) || string.IsNullOrWhiteSpace(typeFullName) || string.IsNullOrWhiteSpace(methodName))
-						throw new ArgumentException("Each batch breakpoint item must include assembly_name, type_full_name, and method_name.");
-					result.Add(new BatchBreakpointItem(assemblyName!, typeFullName!, methodName!, ilOffset, condition, filePath));
+					}
+					if (item.ValueKind == JsonValueKind.Object)
+						result.Add(ParseBatchBreakpointItemElement(item));
 				}
 				return result;
 			}
 
 			throw new ArgumentException("items must be a JSON array of breakpoint definitions.");
+		}
+
+		static BatchBreakpointItem ParseBatchBreakpointItemJson(string json) {
+			using var doc = JsonDocument.Parse(json);
+			if (doc.RootElement.ValueKind != JsonValueKind.Object)
+				throw new ArgumentException("Each batch breakpoint JSON string must decode to an object.");
+			return ParseBatchBreakpointItemElement(doc.RootElement);
+		}
+
+		static BatchBreakpointItem ParseBatchBreakpointItemDictionary(IReadOnlyDictionary<string, object> dict) {
+			string? assemblyName = dict.TryGetValue("assembly_name", out var asm) ? asm?.ToString() : null;
+			string? typeFullName = dict.TryGetValue("type_full_name", out var type) ? type?.ToString() : null;
+			string? methodName = dict.TryGetValue("method_name", out var method) ? method?.ToString() : null;
+			string? filePath = dict.TryGetValue("file_path", out var fp) ? fp?.ToString() : null;
+			string? condition = dict.TryGetValue("condition", out var cond) ? cond?.ToString() : null;
+			uint? ilOffset = null;
+			if (dict.TryGetValue("il_offset", out var il) && il != null) {
+				if (il is JsonElement ilElem && ilElem.ValueKind == JsonValueKind.Number && ilElem.TryGetUInt32(out var elemOffset))
+					ilOffset = elemOffset;
+				else if (uint.TryParse(il.ToString(), out var parsedOffset))
+					ilOffset = parsedOffset;
+			}
+			if (string.IsNullOrWhiteSpace(assemblyName) || string.IsNullOrWhiteSpace(typeFullName) || string.IsNullOrWhiteSpace(methodName))
+				throw new ArgumentException("Each batch breakpoint item must include assembly_name, type_full_name, and method_name.");
+			return new BatchBreakpointItem(assemblyName!, typeFullName!, methodName!, ilOffset, condition, filePath);
+		}
+
+		static BatchBreakpointItem ParseBatchBreakpointItemElement(JsonElement item) {
+			string? assemblyName = item.TryGetProperty("assembly_name", out var asm) ? asm.GetString() : null;
+			string? typeFullName = item.TryGetProperty("type_full_name", out var type) ? type.GetString() : null;
+			string? methodName = item.TryGetProperty("method_name", out var method) ? method.GetString() : null;
+			string? filePath = item.TryGetProperty("file_path", out var fp) ? fp.GetString() : null;
+			string? condition = item.TryGetProperty("condition", out var cond) ? cond.GetString() : null;
+			uint? ilOffset = null;
+			if (item.TryGetProperty("il_offset", out var il)) {
+				if (il.ValueKind == JsonValueKind.Number && il.TryGetUInt32(out var offset))
+					ilOffset = offset;
+				else if (il.ValueKind == JsonValueKind.String && uint.TryParse(il.GetString(), out var parsedOffset))
+					ilOffset = parsedOffset;
+			}
+			if (string.IsNullOrWhiteSpace(assemblyName) || string.IsNullOrWhiteSpace(typeFullName) || string.IsNullOrWhiteSpace(methodName))
+				throw new ArgumentException("Each batch breakpoint item must include assembly_name, type_full_name, and method_name.");
+			return new BatchBreakpointItem(assemblyName!, typeFullName!, methodName!, ilOffset, condition, filePath);
 		}
 
 		( bool HasLoadedModule, string? ModuleName, int? ProcessId, string? NativeAddress ) FindLoadedRuntimeMethodInfo(AssemblyDef assembly, MethodDef method) {

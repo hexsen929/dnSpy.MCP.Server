@@ -26,19 +26,21 @@ using System.Text;
 using System.Text.Json;
 using System.Xml;
 using dnlib.DotNet;
+using dnSpy.Contracts.Documents;
 using dnSpy.Contracts.Documents.TreeView;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 
 namespace dnSpy.MCP.Server.Application {
 	[Export(typeof(SourceMapTools))]
 	public sealed class SourceMapTools {
-		readonly IDocumentTreeView documentTreeView;
+		readonly IDsDocumentService documentService;
 		readonly Dictionary<string, Dictionary<(string MapType, string OriginalFullName), string>?> loadedMaps =
 			new Dictionary<string, Dictionary<(string MapType, string OriginalFullName), string>?>(StringComparer.OrdinalIgnoreCase);
 
 		[ImportingConstructor]
-		public SourceMapTools(IDocumentTreeView documentTreeView) {
-			this.documentTreeView = documentTreeView;
+		public SourceMapTools(IDsDocumentService documentService) {
+			this.documentService = documentService;
 		}
 
 		static readonly JsonSerializerOptions JsonOpts = new JsonSerializerOptions {
@@ -331,9 +333,7 @@ namespace dnSpy.MCP.Server.Application {
 		}
 
 		AssemblyDef? FindAssemblyByName(string name) {
-			return documentTreeView.GetAllModuleNodes()
-				.Select(node => node.Document?.AssemblyDef)
-				.FirstOrDefault(assembly => assembly != null && assembly.Name.String.Equals(name, StringComparison.OrdinalIgnoreCase));
+			return LoadedDocumentsHelper.FindAssembly(documentService, name);
 		}
 
 		static TypeDef? FindTypeInAssembly(AssemblyDef assembly, string typeFullName) {
