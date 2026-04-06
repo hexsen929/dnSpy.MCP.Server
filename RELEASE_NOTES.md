@@ -27,6 +27,14 @@ The main branch now includes an initial static triage toolset for suspicious man
 - surface the first-pass signals an analyst usually wants immediately after loading an unknown assembly
 - complement, not replace, the existing deep decompilation / IL / patching tools
 
+### New: Optional stdio sidecar
+
+An optional `stdio` bridge is now included as `tools/dnSpy.MCP.StdioProxy`.
+
+- it forwards stdio MCP traffic to the local `POST /mcp` endpoint
+- it preserves the existing HTTP/SSE server as the primary transport
+- it is intended for clients that only support launching stdio MCP servers
+
 ### Current tool count on main
 
 - **143+ tools**

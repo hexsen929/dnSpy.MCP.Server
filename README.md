@@ -226,6 +226,8 @@ The server now uses **MCP streamable HTTP** as the primary transport on `http://
 - `POST /mcp` accepts JSON-RPC MCP requests
 - `initialize` returns the negotiated protocol version and a `Mcp-Session-Id` response header
 - subsequent `tools/list` and `tools/call` requests must include that `Mcp-Session-Id`
+- the original HTTP/SSE transport remains the primary built-in server transport
+- an optional `stdio` sidecar/proxy is shipped for MCP clients that only support stdio
 
 ### Generic MCP client configuration
 
@@ -258,6 +260,34 @@ curl -X POST http://localhost:3100/mcp \
 ```
 
 > Some MCP clients still label streamable HTTP as `http`, `streamable-http`, or `remote` depending on their config format. The endpoint is the same: `http://localhost:3100/mcp`.
+
+### Optional stdio proxy
+
+If your MCP client only supports `stdio`, use the bundled proxy under `stdio-proxy/`.
+
+It does **not** replace the built-in HTTP server.
+It simply forwards stdio-framed MCP requests to the local dnSpy HTTP endpoint and preserves the server session header automatically.
+
+Example:
+
+```bat
+stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd --url http://127.0.0.1:3100/mcp
+```
+
+Environment variables also work:
+
+```bat
+set DNSPY_MCP_URL=http://127.0.0.1:3100/mcp
+set DNSPY_MCP_API_KEY=your_api_key_if_enabled
+stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd
+```
+
+Notes:
+
+- keep dnSpy's built-in MCP server enabled and running
+- the stdio proxy is **optional**; HTTP/SSE remains the primary transport
+- the proxy currently forwards request/response traffic to `POST /mcp` and is sufficient for `initialize`, `tools/list`, `tools/call`, and normal resource calls
+- `shutdown` / `exit` are handled locally by the proxy for better stdio-client compatibility
 
 ---
 
@@ -1081,6 +1111,8 @@ dnSpy.MCP.Server/
 ├── CHANGELOG.md
 ├── README.md
 ├── RELEASE_NOTES.md
+├── tools/
+│   └── dnSpy.MCP.StdioProxy/      # Optional stdio -> HTTP MCP bridge
 └── src/
     ├── Application/
     │   ├── AssemblyTools.cs         # Assembly & type listing

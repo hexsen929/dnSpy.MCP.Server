@@ -77,6 +77,8 @@
     <None Remove="backup\**\*.xaml" />
     <Compile Remove="docs\**\*.cs" />
     <None Remove="docs\**\*.xaml" />
+    <Compile Remove="tools\**\*.cs" />
+    <None Remove="tools\**\*.xaml" />
     <Compile Remove="Sample\**\*.cs" />
     <None Remove="Sample\**\*.xaml" />
     <Page Remove="Sample\**\*.xaml" />

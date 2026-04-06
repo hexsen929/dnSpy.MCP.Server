@@ -19,10 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `detect_anti_debug` — anti-debugger API / blacklist / bootstrap heuristics
   - `detect_anti_tamper` — anti-tamper / integrity / RVA bootstrap heuristics
   - `get_protection_report` — one-call protection-oriented aggregate report
+- **Optional stdio bridge**:
+  - added `tools/dnSpy.MCP.StdioProxy` as a standalone console sidecar
+  - forwards stdio-framed MCP traffic to the existing local `POST /mcp` endpoint
+  - keeps the original HTTP/SSE server transport unchanged
 
 ### Documentation
 - README now documents the expanded protection / malware analysis tool group and updates the tool count to 143+ on the main branch.
-- Architecture docs now include `MalwareAnalysisTools` and the expanded command surface.
+- Architecture docs now include `MalwareAnalysisTools`, the expanded command surface, and the optional stdio sidecar.
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that exposes advanced .NET assembly analysis capabilities through a streamable HTTP transport (`POST /mcp`) plus legacy SSE compatibility endpoints. The codebase is organized by functional domains to maintain clarity and enable incremental development.
+The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that exposes advanced .NET assembly analysis capabilities through a streamable HTTP transport (`POST /mcp`) plus legacy SSE compatibility endpoints. An optional stdio sidecar may proxy stdio clients into that HTTP endpoint, but the built-in server transport remains HTTP/SSE. The codebase is organized by functional domains to maintain clarity and enable incremental development.
 
 ---
 
@@ -16,13 +16,17 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 - streamable HTTP session handling at `GET|POST|DELETE /mcp`
 - legacy SSE compatibility handling at `/sse` + `/message`
 - SSE event streaming with heartbeat/status events
-- MCP lifecycle (initialize, ping, shutdown)
+- MCP lifecycle core (`initialize`, `ping`, tool/resource requests); optional stdio proxy handles local `shutdown` / `exit`
 - Error handling and response formatting
 
 **Public Methods**:
 - `Start()` - Start HTTP listener
 - `Stop()` - Graceful shutdown
 - `ProcessRequest(stream)` - Handle MCP requests
+
+**Transport note**:
+- HTTP/SSE is the built-in primary transport
+- optional stdio support is implemented as an external sidecar/proxy, not by replacing `McpServer`
 
 ---
 
@@ -415,6 +419,9 @@ Core service classes are wrapped in `Lazy<T>` to defer MEF construction until fi
 
 This keeps the dispatch logic and schema declarations independently editable.
 
+### 4. **Optional sidecar instead of transport replacement**
+For stdio-only MCP clients, the project ships an optional console sidecar (`tools/dnSpy.MCP.StdioProxy`) that converts stdio framing to the existing `POST /mcp` HTTP flow. This preserves the in-process dnSpy transport design and avoids duplicating server logic.
+
 ### 4. **Pagination**
 Commands handling large result sets use cursor-based pagination:
 - `EncodeCursor(offset, pageSize)` → Base64-encoded JSON
@@ -526,6 +533,8 @@ dnSpy.MCP.Server/
 │     ├─ SkillsTools.cs
 │     ├─ ScriptTools.cs
 │     └─ WindowTools.cs
+├─ tools/
+│  └─ dnSpy.MCP.StdioProxy/   # Optional stdio -> HTTP MCP bridge
 ├─ docs/
 │  ├─ ARCHITECTURE.md
 │  └─ STATUS.md
