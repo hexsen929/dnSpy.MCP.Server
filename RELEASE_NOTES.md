@@ -38,7 +38,7 @@ An optional `stdio` bridge is now included as `tools/dnSpy.MCP.StdioProxy`.
 ### Fixed: localhost / 127.0.0.1 local compatibility
 
 - when the server host is `localhost`, the listener now also registers `127.0.0.1`
-- the bundled stdio proxy wrapper now defaults to `http://localhost:3100/mcp`
+- the bundled stdio proxy wrapper can target either loopback form; current examples prefer `http://127.0.0.1:3100/mcp`
 - this avoids `Bad Request - Invalid Hostname` when a local client uses the loopback IP form
 - if the dual-prefix registration is rejected on a specific machine, the listener now falls back automatically instead of aborting startup
 

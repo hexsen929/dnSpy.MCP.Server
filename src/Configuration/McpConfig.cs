@@ -54,13 +54,14 @@ namespace dnSpy.MCP.Server.Configuration
 
         /// <summary>
         /// Hostname or IP address the MCP server listens on.
-        /// Use "localhost" (default) for local-only access.
+        /// Use "127.0.0.1" (default) for local-only access.
+        /// "localhost" is also supported and will try to register both loopback forms.
         /// Use "0.0.0.0" or "+" to listen on all interfaces — required for remote debugging
         /// from a sandbox or virtual machine. Note: non-localhost bindings require a prior
         /// netsh url reservation: netsh http add urlacl url=http://+:PORT/ user=Everyone
         /// </summary>
         [JsonPropertyName("host")]
-        public string Host { get; set; } = "localhost";
+        public string Host { get; set; } = "127.0.0.1";
 
         /// <summary>TCP port the MCP server listens on. Default 3100.</summary>
         [JsonPropertyName("port")]

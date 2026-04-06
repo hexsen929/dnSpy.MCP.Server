@@ -11,7 +11,7 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 ### 1. **McpServer.cs**
 **Responsibility**: HTTP transport entrypoint and route coordination
 **Key Functionality**:
-- HTTP listener on localhost:3100
+- HTTP listener on 127.0.0.1:3100 by default
 - JSON-RPC 2.0 message handling
 - streamable HTTP session handling at `GET|POST|DELETE /mcp`
 - legacy SSE compatibility handling at `/sse` + `/message`

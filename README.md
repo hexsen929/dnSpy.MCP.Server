@@ -206,11 +206,11 @@ If you are unsure whether a dnSpy tree is still contaminated by older plugin fil
 
 ### Runtime
 
-1. Start dnSpy — the MCP server starts automatically on `http://localhost:3100`
+1. Start dnSpy — the MCP server starts automatically on `http://127.0.0.1:3100`
 2. Verify it is running:
    ```bash
-   curl http://localhost:3100/health
-   curl -i -X POST http://localhost:3100/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"probe\",\"version\":\"1.0\"}}}"
+   curl http://127.0.0.1:3100/health
+   curl -i -X POST http://127.0.0.1:3100/mcp -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"probe\",\"version\":\"1.0\"}}}"
    ```
 3. Configure your MCP client (see next section)
 
@@ -218,7 +218,7 @@ If you are unsure whether a dnSpy tree is still contaminated by older plugin fil
 
 ## Client Configuration
 
-The server now uses **MCP streamable HTTP** as the primary transport on `http://localhost:3100/mcp`.
+The server now uses **MCP streamable HTTP** as the primary transport on `http://127.0.0.1:3100/mcp`.
 
 ### Transport Summary
 
@@ -236,7 +236,7 @@ The server now uses **MCP streamable HTTP** as the primary transport on `http://
   "mcpServers": {
     "dnspy": {
       "type": "http",
-      "url": "http://localhost:3100/mcp"
+      "url": "http://127.0.0.1:3100/mcp"
     }
   }
 }
@@ -245,7 +245,7 @@ The server now uses **MCP streamable HTTP** as the primary transport on `http://
 ### Minimal HTTP example
 
 ```bash
-curl -X POST http://localhost:3100/mcp \
+curl -X POST http://127.0.0.1:3100/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -259,7 +259,7 @@ curl -X POST http://localhost:3100/mcp \
   }'
 ```
 
-> Some MCP clients still label streamable HTTP as `http`, `streamable-http`, or `remote` depending on their config format. The endpoint is the same: `http://localhost:3100/mcp`.
+> Some MCP clients still label streamable HTTP as `http`, `streamable-http`, or `remote` depending on their config format. The endpoint is the same: `http://127.0.0.1:3100/mcp`.
 
 ### Optional stdio proxy
 
@@ -271,16 +271,18 @@ It simply forwards stdio-framed MCP requests to the local dnSpy HTTP endpoint an
 Example:
 
 ```bat
-stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd --url http://localhost:3100/mcp
+stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd --url http://127.0.0.1:3100/mcp
 ```
 
 Environment variables also work:
 
 ```bat
-set DNSPY_MCP_URL=http://localhost:3100/mcp
+set DNSPY_MCP_URL=http://127.0.0.1:3100/mcp
 set DNSPY_MCP_API_KEY=your_api_key_if_enabled
 stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd
 ```
+
+For local-only use, prefer `127.0.0.1` over `localhost` in client configs. Both are supported by the server, but `127.0.0.1` avoids hostname-specific quirks seen in some MCP clients, Wine/CrossOver setups, and Windows `HttpListener` environments.
 
 Notes:
 
@@ -1164,7 +1166,7 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 
 ```json
 {
-  "host": "localhost",
+  "host": "127.0.0.1",
   "port": 3100,
   "requireApiKey": false,
   "apiKey": "",
@@ -1177,7 +1179,7 @@ A `mcp-config.json` file is created automatically next to the MCP Server DLL on 
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `host` | `"localhost"` | Bind address. Use `"0.0.0.0"` to listen on all interfaces (for remote debugging from a sandbox or VM). See note below. |
+| `host` | `"127.0.0.1"` | Bind address for local-only access. `localhost` is also supported. Use `"0.0.0.0"` to listen on all interfaces (for remote debugging from a sandbox or VM). See note below. |
 | `port` | `3100` | TCP port the server listens on. |
 | `requireApiKey` | `false` | Require `X-API-Key` / `Authorization: Bearer` on every request. |
 | `apiKey` | `""` | API key value. Generate with `openssl rand -hex 32`. |
@@ -1198,10 +1200,10 @@ After editing `mcp-config.json`, call `reload_mcp_config` or restart dnSpy to ap
 
 ```bash
 # Windows (PowerShell)
-Invoke-RestMethod http://localhost:3100
+Invoke-RestMethod http://127.0.0.1:3100
 
 # Windows (cmd)
-curl http://localhost:3100
+curl http://127.0.0.1:3100
 
 # Check port is listening
 netstat -ano | findstr :3100
@@ -1223,7 +1225,7 @@ netstat -ano | findstr :3100
 | `dump_module_from_memory` returns no bytes | Module has no address (pure dynamic) | Some in-memory modules emitted by reflection emit cannot be dumped |
 | Dump `IsFileLayout: false` | Memory layout dump | Use `dump_module_unpacked` instead — it performs the layout fix automatically |
 | `unpack_from_memory` fails with anti-debug error | Process kills itself before EntryPoint | Use `patch_method_to_ret` to neutralize anti-debug methods first, save the patched binary, then retry |
-| `Failed to connect` when adding MCP server | Wrong transport type or endpoint | Use the streamable HTTP endpoint `http://localhost:3100/mcp` and ensure the client is configured for HTTP/streamable HTTP, not SSE |
+| `Failed to connect` when adding MCP server | Wrong transport type or endpoint | Use the streamable HTTP endpoint `http://127.0.0.1:3100/mcp` and ensure the client is configured for HTTP/streamable HTTP, not SSE |
 | `Could not load file or assembly 'System.Text.Json'` / `System.Collections.Immutable` / `System.Memory` | net48 plugin copied into a dnSpy install whose `*.config` redirects are too old | Redeploy from a clean dnSpy tree and add the binding redirects shown in **Manual net48 dependency repair** above |
 | dnSpy still loads an old MCP build after redeploy | Multiple dnSpy folders or stale copied plugin files | Search for every `dnSpy.MCP.Server.x.dll`, delete old copies, and redeploy only the current plugin-only bundle into a fresh local install |
 | `dump_cordbg_il` returns E_NOINTERFACE errors | COM STA apartment threading | `ICorDebugModule` COM objects belong to the CorDebug engine thread; calling from another STA fails. This is a known limitation — use `dump_module_unpacked` instead for memory dumps. |

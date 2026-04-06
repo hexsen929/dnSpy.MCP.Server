@@ -58,7 +58,7 @@ namespace dnSpy.MCP.Server.Presentation {
 		bool enableServer = false;
 
 		/// <summary>
-		/// Gets or sets the server host (default: localhost).
+		/// Gets or sets the server host (default: 127.0.0.1).
 		/// </summary>
 		public string Host {
 			get => host;
@@ -69,7 +69,7 @@ namespace dnSpy.MCP.Server.Presentation {
 				}
 			}
 		}
-		string host = "localhost";
+		string host = "127.0.0.1";
 
 		/// <summary>
 		/// Gets or sets the server port (default: 3100 - to avoid conflicts with Docker/Node).
