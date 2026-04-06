@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.16] - 2026-04-06
+
+### Fixed
+- GitHub Actions now builds both the MCP plugin and the optional stdio proxy into explicit `pack-out/<tfm>/...` directories and packages from there, removing the remaining dependency on dnSpyEx's varying legacy output layouts for the net48 release path.
+
 ## [1.8.15] - 2026-04-06
 
 ### Fixed

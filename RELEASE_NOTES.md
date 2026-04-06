@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.16 — 2026-04-06
+
+### Fixed: explicit pack-out staging for CI packaging
+
+- both the MCP plugin and the optional stdio proxy now build into deterministic `pack-out/<target>/...` directories in GitHub Actions
+- release packaging now reads only from those staging directories
+- this removes the last net48 packaging dependency on dnSpyEx's legacy output layout
+
+---
+
 ## v1.8.15 — 2026-04-06
 
 ### Fixed: explicit legacy/current output probing in CI
