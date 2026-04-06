@@ -2,7 +2,7 @@
 
 ---
 
-## v1.8.2 — 2026-04-06
+## v1.8.3 — 2026-04-06
 
 ### New: Protection / Malware Triage Toolkit
 
@@ -34,6 +34,12 @@ An optional `stdio` bridge is now included as `tools/dnSpy.MCP.StdioProxy`.
 - it forwards stdio MCP traffic to the local `POST /mcp` endpoint
 - it preserves the existing HTTP/SSE server as the primary transport
 - it is intended for clients that only support launching stdio MCP servers
+
+### Fixed: localhost / 127.0.0.1 local compatibility
+
+- when the server host is `localhost`, the listener now also registers `127.0.0.1`
+- the bundled stdio proxy wrapper now defaults to `http://localhost:3100/mcp`
+- this avoids `Bad Request - Invalid Hostname` when a local client uses the loopback IP form
 
 ### Current tool count on main
 

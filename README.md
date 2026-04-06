@@ -2,7 +2,7 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server embedded in dnSpy that exposes full .NET assembly analysis, editing, debugging, memory-dump, and deobfuscation capabilities to any MCP-compatible AI assistant.
 
-**Version**: 1.8.2 | **Tools**: 143+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
+**Version**: 1.8.3 | **Tools**: 143+ | **Status**: beta | **Targets**: .NET 4.8 + .NET 10.0-windows
 
 ---
 
@@ -271,13 +271,13 @@ It simply forwards stdio-framed MCP requests to the local dnSpy HTTP endpoint an
 Example:
 
 ```bat
-stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd --url http://127.0.0.1:3100/mcp
+stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd --url http://localhost:3100/mcp
 ```
 
 Environment variables also work:
 
 ```bat
-set DNSPY_MCP_URL=http://127.0.0.1:3100/mcp
+set DNSPY_MCP_URL=http://localhost:3100/mcp
 set DNSPY_MCP_API_KEY=your_api_key_if_enabled
 stdio-proxy\Run-dnSpy-MCP-Stdio-Proxy.cmd
 ```

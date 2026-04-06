@@ -2,6 +2,6 @@ namespace dnSpy.MCP.Server
 {
     static class ServerBuildInfo
     {
-        public const string Version = "1.8.2";
+        public const string Version = "1.8.3";
     }
 }
