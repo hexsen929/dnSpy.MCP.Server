@@ -30,6 +30,7 @@ using System.Text.Json;
 using Iced.Intel;
 using dnSpy.Contracts.Debugger;
 using dnSpy.MCP.Server.Contracts;
+using dnSpy.MCP.Server.Helper;
 
 namespace dnSpy.MCP.Server.Application {
 	[Export(typeof(NativeRuntimeTools))]
@@ -341,7 +342,7 @@ namespace dnSpy.MCP.Server.Application {
 		public CallToolResult SuspendThreads(Dictionary<string, object>? arguments) {
 			var process = ResolveProcess(arguments);
 			var requestedThreadIds = ParseThreadIds(arguments);
-			var threads = process.Threads
+			var threads = DebuggerDispatcherHelper.GetProcessThreads(process)
 				.Where(t => requestedThreadIds.Count == 0 || requestedThreadIds.Contains(t.Id))
 				.ToList();
 			if (threads.Count == 0)
@@ -372,7 +373,7 @@ namespace dnSpy.MCP.Server.Application {
 		public CallToolResult ResumeThreads(Dictionary<string, object>? arguments) {
 			var process = ResolveProcess(arguments);
 			var requestedThreadIds = ParseThreadIds(arguments);
-			var threads = process.Threads
+			var threads = DebuggerDispatcherHelper.GetProcessThreads(process)
 				.Where(t => requestedThreadIds.Count == 0 || requestedThreadIds.Contains(t.Id))
 				.ToList();
 			if (threads.Count == 0)
