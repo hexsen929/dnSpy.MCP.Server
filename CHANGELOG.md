@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.28] - 2026-04-07
+
+### Fixed
+- Debugger state and pause-sensitive tools now resolve process/thread information on the WPF debugger dispatcher instead of mixing background-thread snapshots with UI-thread stepping/evaluation.
+- `wait_for_pause` now waits for a usable paused thread instead of returning early on transient paused states with `ThreadCount = 0`, which previously caused immediate follow-up failures in `get_current_location`, `get_call_stack`, `step_*`, and memory inspection tools.
+- `step_over` / `step_into` / `step_out` no longer rely on the misleading global `DbgManager.IsRunning` flag when a specific process is already paused.
+- `get_local_variables` / `eval_expression` now use the same paused-thread resolution path as the debugger tools, reducing false `No threads found in the process` failures after a breakpoint hit.
+- `start_debugging`, `attach_to_process`, and `stop_debugging` now report session visibility / shutdown state more accurately instead of racing the async debugger lifecycle.
+- `suspend_threads` / `resume_threads` now enumerate both process-level and runtime-level thread collections, matching the new debugger thread-resolution path.
+
 ## [1.8.27] - 2026-04-07
 
 ### Fixed

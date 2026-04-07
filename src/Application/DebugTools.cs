@@ -75,20 +75,14 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult GetDebuggerState() {
 			try {
-				var mgr = dbgManager.Value;
-				var processes = mgr.Processes.Select(p => new {
-					Id = p.Id,
-					State = p.State.ToString(),
-					IsRunning = p.IsRunning,
-					RuntimeCount = p.Runtimes.Length,
-					ThreadCount = p.Threads.Length
-				}).ToList();
+				var snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
 
 				var result = JsonSerializer.Serialize(new {
-					IsDebugging = mgr.IsDebugging,
-					IsRunning = mgr.IsRunning,
-					ProcessCount = processes.Count,
-					Processes = processes
+					IsDebugging = snapshot.IsDebugging,
+					IsRunning = snapshot.EffectiveIsRunning,
+					ManagerIsRunning = snapshot.ManagerIsRunning,
+					ProcessCount = snapshot.ProcessCount,
+					Processes = snapshot.Processes
 				}, new JsonSerializerOptions { WriteIndented = true });
 
 				return new CallToolResult {
@@ -401,9 +395,10 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult ContinueDebugger() {
 			try {
-				if (!dbgManager.Value.IsDebugging || dbgManager.Value.Processes.Length == 0)
+				var snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
+				if (!snapshot.IsDebugging || snapshot.ProcessCount == 0)
 					throw new InvalidOperationException("No active debug session.");
-				dbgManager.Value.RunAll();
+				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.RunAll());
 				return new CallToolResult {
 					Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed (RunAll called)." } }
 				};
@@ -419,7 +414,8 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult BreakDebugger(Dictionary<string, object>? arguments) {
 			try {
-				if (!dbgManager.Value.IsDebugging || dbgManager.Value.Processes.Length == 0)
+				var snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
+				if (!snapshot.IsDebugging || snapshot.ProcessCount == 0)
 					throw new InvalidOperationException("No active debug session.");
 
 				bool safePause = false;
@@ -430,7 +426,7 @@ namespace dnSpy.MCP.Server.Application {
 						safePause = parsed;
 				}
 
-				dbgManager.Value.BreakAll();
+				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.BreakAll());
 				var json = JsonSerializer.Serialize(new {
 					Success = true,
 					Strategy = safePause ? "break_all_safe_pause" : "break_all",
@@ -453,9 +449,26 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult StopDebugging() {
 			try {
-				dbgManager.Value.StopDebuggingAll();
+				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.StopDebuggingAll());
+				var deadline = DateTime.UtcNow.AddSeconds(2);
+				while (DateTime.UtcNow < deadline) {
+					var snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
+					if (!snapshot.IsDebugging || snapshot.ProcessCount == 0) {
+						return new CallToolResult {
+							Content = new List<ToolContent> { new ToolContent { Text = "All debug sessions stopped." } }
+						};
+					}
+					Thread.Sleep(100);
+				}
+
+				var remaining = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
+				var note = JsonSerializer.Serialize(new {
+					Stopped = false,
+					ProcessCount = remaining.ProcessCount,
+					Note = "Stop request was sent, but the debugger is still winding down. Retry get_debugger_state in a moment."
+				}, new JsonSerializerOptions { WriteIndented = true });
 				return new CallToolResult {
-					Content = new List<ToolContent> { new ToolContent { Text = "All debug sessions stopped." } }
+					Content = new List<ToolContent> { new ToolContent { Text = note } }
 				};
 			}
 			catch (Exception ex) {
@@ -469,67 +482,57 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult GetCallStack() {
 			try {
-				var mgr = dbgManager.Value;
-
-				if (!mgr.IsDebugging) {
-					return new CallToolResult {
-						Content = new List<ToolContent> { new ToolContent { Text = "Debugger is not active. Start debugging first." } }
-					};
-				}
-
-				// Prefer the currently selected thread; fall back to the first paused thread.
-				DbgThread? currentThread = mgr.CurrentThread?.Current;
-
-				if (currentThread == null) {
-					var pausedProcess = mgr.Processes.FirstOrDefault(p => p.State == DbgProcessState.Paused);
-					if (pausedProcess == null) {
+				return DebuggerDispatcherHelper.Invoke(() => {
+					var mgr = dbgManager.Value;
+					if (!mgr.IsDebugging) {
 						return new CallToolResult {
-							Content = new List<ToolContent> { new ToolContent { Text = "No paused process found. Debugger may still be running. Use break_debugger first." } }
+							Content = new List<ToolContent> { new ToolContent { Text = "Debugger is not active. Start debugging first." } }
 						};
 					}
-					currentThread = pausedProcess.Threads.FirstOrDefault();
-				}
 
-				if (currentThread == null) {
-					return new CallToolResult {
-						Content = new List<ToolContent> { new ToolContent { Text = "No thread is available." } }
-					};
-				}
+					var selection = ResolveThreadSelectionCore(mgr, null, requirePaused: true, requireFrame: true);
+					var currentThread = selection.Thread;
+					if (currentThread == null) {
+						return new CallToolResult {
+							Content = new List<ToolContent> { new ToolContent { Text = selection.Process == null ? "No paused process found. Debugger may still be running. Use break_debugger first." : (selection.ProcessIsPaused ? "No usable paused thread is available yet." : $"Process {selection.Process.Id} is not paused.") } }
+						};
+					}
 
-				const int maxFrames = 50;
-				var frames = new List<object>();
-				var stackFrames = currentThread.GetFrames(maxFrames);
-				try {
-					foreach (var frame in stackFrames) {
-						try {
-							frames.Add(new {
-								Index = frames.Count,
-								FunctionToken = $"0x{frame.FunctionToken:X8}",
-								FunctionOffset = frame.FunctionOffset,
-								ModuleName = frame.Module?.Name ?? "Unknown",
-								IsCurrentStatement = (frame.Flags & DbgStackFrameFlags.LocationIsNextStatement) != 0
-							});
-						}
-						finally {
-							frame.Close();
+					const int maxFrames = 50;
+					var frames = new List<object>();
+					var stackFrames = currentThread.GetFrames(maxFrames);
+					try {
+						foreach (var frame in stackFrames) {
+							try {
+								frames.Add(new {
+									Index = frames.Count,
+									FunctionToken = $"0x{frame.FunctionToken:X8}",
+									FunctionOffset = frame.FunctionOffset,
+									ModuleName = frame.Module?.Name ?? "Unknown",
+									IsCurrentStatement = (frame.Flags & DbgStackFrameFlags.LocationIsNextStatement) != 0
+								});
+							}
+							finally {
+								frame.Close();
+							}
 						}
 					}
-				}
-				finally {
-					// GetFrames() returns owned frames; they were closed in the loop above.
-				}
+					finally {
+						// GetFrames() returns owned frames; they were closed in the loop above.
+					}
 
-				var result = JsonSerializer.Serialize(new {
-					ThreadId = currentThread.Id,
-					ManagedId = currentThread.ManagedId,
-					FrameCount = frames.Count,
-					MaxFramesReturned = maxFrames,
-					Frames = frames
-				}, new JsonSerializerOptions { WriteIndented = true });
+					var result = JsonSerializer.Serialize(new {
+						ThreadId = currentThread.Id,
+						ManagedId = currentThread.ManagedId,
+						FrameCount = frames.Count,
+						MaxFramesReturned = maxFrames,
+						Frames = frames
+					}, new JsonSerializerOptions { WriteIndented = true });
 
-				return new CallToolResult {
-					Content = new List<ToolContent> { new ToolContent { Text = result } }
-				};
+					return new CallToolResult {
+						Content = new List<ToolContent> { new ToolContent { Text = result } }
+					};
+				});
 			}
 			catch (Exception ex) {
 				McpLogger.Exception(ex, "GetCallStack failed");
@@ -577,14 +580,16 @@ namespace dnSpy.MCP.Server.Application {
 				BreakKind        = breakKind,
 			};
 
-			var error = dbgManager.Value.Start(opts);
+			string? error = null;
+			DebuggerDispatcherHelper.Invoke(() => error = dbgManager.Value.Start(opts));
 			bool sessionCreated = false;
 			int processCount = 0;
 			if (error == null) {
-				var deadline = DateTime.UtcNow.AddMilliseconds(1200);
+				var deadline = DateTime.UtcNow.AddSeconds(3);
 				do {
-					processCount = dbgManager.Value.Processes.Length;
-					if (dbgManager.Value.IsDebugging && processCount > 0) {
+					var snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
+					processCount = snapshot.ProcessCount;
+					if (snapshot.IsDebugging && processCount > 0) {
 						sessionCreated = true;
 						break;
 					}
@@ -603,7 +608,7 @@ namespace dnSpy.MCP.Server.Application {
 				Note = error == null
 					? (sessionCreated
 						? "Debug session created. Use get_debugger_state / wait_for_pause to observe pause state."
-						: "Start request was accepted, but no debug session became visible within 1200 ms. The process may have exited immediately, failed before entry, or is still initializing.")
+						: "Start request was accepted, but no debug session became visible within 3 seconds. The process may have exited immediately, failed before entry, or is still initializing.")
 					: null
 			}, new JsonSerializerOptions {
 				WriteIndented = true,
@@ -644,14 +649,31 @@ namespace dnSpy.MCP.Server.Application {
 
 			// Attach to the first matching entry (each entry represents one CLR runtime in the process)
 			var target = processes[0];
-			target.Attach();
+			DebuggerDispatcherHelper.Invoke(() => target.Attach());
+
+			bool sessionCreated = false;
+			int processCount = 0;
+			var deadline = DateTime.UtcNow.AddSeconds(3);
+			do {
+				var snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
+				processCount = snapshot.ProcessCount;
+				if (snapshot.IsDebugging && processCount > 0) {
+					sessionCreated = true;
+					break;
+				}
+				Thread.Sleep(100);
+			} while (DateTime.UtcNow < deadline);
 
 			var result = JsonSerializer.Serialize(new {
 				Attached    = true,
 				ProcessId   = pid,
 				RuntimeName = target.RuntimeName,
 				Name        = target.Name,
-				Note        = "Attach is asynchronous. Use get_debugger_state to verify the session."
+				SessionCreated = sessionCreated,
+				ProcessCount = processCount,
+				Note        = sessionCreated
+					? "Attach completed and a debug session became visible."
+					: "Attach was requested, but no debug session became visible within 3 seconds. Retry get_debugger_state."
 			}, new JsonSerializerOptions { WriteIndented = true });
 
 			return new CallToolResult {
@@ -689,16 +711,21 @@ namespace dnSpy.MCP.Server.Application {
 	/// Arguments: thread_id (optional), process_id (optional)
 	/// </summary>
 	public CallToolResult GetCurrentLocation(Dictionary<string, object>? arguments) {
-		var mgr = dbgManager.Value;
-		if (!mgr.IsDebugging)
-			throw new InvalidOperationException("No active debug session.");
+		return DebuggerDispatcherHelper.Invoke(() => {
+			var mgr = dbgManager.Value;
+			if (!mgr.IsDebugging)
+				throw new InvalidOperationException("No active debug session.");
 
-		var thread = ResolveThread(mgr, arguments);
-		if (thread == null)
-			throw new InvalidOperationException(
-				"No paused thread found. Use break_debugger or wait for a breakpoint.");
+			var selection = ResolveThreadSelectionCore(mgr, arguments, requirePaused: true, requireFrame: true);
+			var thread = selection.Thread;
+			if (thread == null)
+				throw new InvalidOperationException(
+					selection.Process == null
+						? "No paused process found. Use break_debugger or wait for a breakpoint."
+						: (selection.ProcessIsPaused
+							? "No paused thread found. The process is paused but dnSpy has not published a usable stack yet. Retry wait_for_pause."
+							: $"Process {selection.Process.Id} is not paused. Use break_debugger or wait_for_pause first."));
 
-		return System.Windows.Application.Current.Dispatcher.Invoke(() => {
 			var frames = thread.GetFrames(1);
 			if (frames.Length == 0)
 				return new CallToolResult { Content = new List<ToolContent> {
@@ -724,7 +751,8 @@ namespace dnSpy.MCP.Server.Application {
 	/// </summary>
 	public CallToolResult WaitForPause(Dictionary<string, object>? arguments) {
 		var mgr = dbgManager.Value;
-		if (!mgr.IsDebugging)
+		var initial = DebuggerDispatcherHelper.CaptureState(mgr);
+		if (!initial.IsDebugging)
 			throw new InvalidOperationException("No active debug session.");
 
 		int timeoutSeconds = 30;
@@ -735,12 +763,28 @@ namespace dnSpy.MCP.Server.Application {
 
 		var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
 		while (DateTime.UtcNow < deadline) {
-			var paused = mgr.Processes.FirstOrDefault(p => p.State == DbgProcessState.Paused);
-			if (paused != null) {
+			var paused = DebuggerDispatcherHelper.Invoke(() => {
+				if (!mgr.IsDebugging)
+					return (IsDebugging: false, ProcessId: (int?)null, ThreadCount: 0, ThreadId: (int?)null);
+
+				var selection = ResolveThreadSelectionCore(mgr, null, requirePaused: true, requireFrame: false);
+				return (
+					IsDebugging: true,
+					ProcessId: selection.Process != null ? (int?)selection.Process.Id : null,
+					ThreadCount: selection.ThreadCount,
+					ThreadId: selection.Thread != null ? (int?)selection.Thread.Id : null
+				);
+			});
+
+			if (!paused.IsDebugging)
+				throw new InvalidOperationException("The debug session ended before a paused thread became available.");
+
+			if (paused.ProcessId.HasValue && paused.ThreadId.HasValue) {
 				var json = JsonSerializer.Serialize(new {
 					Paused      = true,
-					ProcessId   = (int)paused.Id,
-					ThreadCount = paused.Threads.Length
+					ProcessId   = paused.ProcessId.Value,
+					ThreadCount = paused.ThreadCount,
+					ThreadId    = paused.ThreadId.Value
 				}, new JsonSerializerOptions { WriteIndented = true });
 				return new CallToolResult {
 					Content = new List<ToolContent> { new ToolContent { Text = json } }
@@ -753,49 +797,8 @@ namespace dnSpy.MCP.Server.Application {
 
 	// ── Private stepping helpers ──────────────────────────────────────────────
 
-	DbgThread? ResolveThread(DbgManager mgr, Dictionary<string, object>? args) {
-		// 1. Explicit thread_id
-		if (args != null && args.TryGetValue("thread_id", out var tidObj)) {
-			if (uint.TryParse(tidObj?.ToString(), out var tidVal))
-				foreach (var p in mgr.Processes)
-					foreach (var t in p.Threads)
-						if (t.Id == tidVal) return t;
-			throw new ArgumentException($"Thread {tidObj} not found");
-		}
-		// 2. Optional process_id filter
-		DbgProcess? targetProc = null;
-		if (args != null && args.TryGetValue("process_id", out var pidObj)) {
-			if (uint.TryParse(pidObj?.ToString(), out var pidVal))
-				targetProc = mgr.Processes.FirstOrDefault(p => p.Id == pidVal);
-			if (targetProc == null) throw new ArgumentException($"Process {pidObj} not found");
-		}
-		// 3. Current thread (honors process_id if set)
-		var cur = mgr.CurrentThread?.Current;
-		if (cur != null && (targetProc == null || cur.Process == targetProc)) return cur;
-		// 4. First paused thread in target/any process
-		var procs = targetProc != null ? new[] { targetProc } : mgr.Processes.ToArray();
-		return procs.Where(p => p.State == DbgProcessState.Paused)
-		            .SelectMany(p => p.Threads).FirstOrDefault();
-	}
-
 	CallToolResult StepImpl(Dictionary<string, object>? arguments, DbgStepKind stepKind) {
 		var mgr = dbgManager.Value;
-		if (!mgr.IsDebugging)
-			throw new InvalidOperationException(
-				"No active debug session. Use start_debugging or attach_to_process first.");
-
-		// Validate that the process is actually paused before attempting to step.
-		// IsRunning is bool? — null = no session, true = running, false = paused.
-		if (mgr.IsRunning == true)
-			throw new InvalidOperationException(
-				"Cannot step: the process is currently running. " +
-				"Use break_debugger or wait_for_pause to pause it first.");
-
-		var thread = ResolveThread(mgr, arguments);
-		if (thread == null)
-			throw new InvalidOperationException(
-				"No paused thread found. Use break_debugger or wait for a breakpoint to hit.");
-
 		// Default 15s — leaves a safety margin before typical MCP client timeouts (~30s).
 		int timeoutSeconds = 15;
 		if (arguments != null && arguments.TryGetValue("timeout_seconds", out var tso)) {
@@ -807,7 +810,21 @@ namespace dnSpy.MCP.Server.Application {
 		string? stepError = null;
 		object? frameInfo = null;
 
-		System.Windows.Application.Current.Dispatcher.Invoke(() => {
+		DebuggerDispatcherHelper.Invoke(() => {
+			if (!mgr.IsDebugging)
+				throw new InvalidOperationException(
+					"No active debug session. Use start_debugging or attach_to_process first.");
+
+			var selection = ResolveThreadSelectionCore(mgr, arguments, requirePaused: true, requireFrame: true);
+			var thread = selection.Thread;
+			if (thread == null)
+				throw new InvalidOperationException(
+					selection.Process == null
+						? "Cannot step: no paused process is available. Use break_debugger or wait_for_pause first."
+						: (selection.ProcessIsPaused
+							? "Cannot step: the process is paused but dnSpy has not published a usable stack frame yet. Retry wait_for_pause."
+							: $"Cannot step: process {selection.Process.Id} is not paused. Use break_debugger or wait_for_pause first."));
+
 			var stepper = thread.CreateStepper();
 			if (!stepper.CanStep) {
 				stepper.Close();
@@ -845,7 +862,7 @@ namespace dnSpy.MCP.Server.Application {
 					"The process may have resumed without triggering StepComplete, " +
 					"or a dialog may be blocking the debugger. " +
 					"Check get_debugger_state and list_dialogs.");
-			if (!mgr.IsDebugging)
+			if (!DebuggerDispatcherHelper.CaptureState(mgr).IsDebugging)
 				throw new InvalidOperationException(
 					"The debug session ended while waiting for the step to complete. " +
 					"The process likely crashed due to an unhandled exception (e.g. Anti-Tamper protection " +
@@ -868,6 +885,34 @@ namespace dnSpy.MCP.Server.Application {
 		return new CallToolResult {
 			Content = new List<ToolContent> { new ToolContent { Text = json } }
 		};
+	}
+
+	DebuggerSelection ResolveThreadSelectionCore(
+		DbgManager mgr,
+		Dictionary<string, object>? arguments,
+		bool requirePaused,
+		bool requireFrame) {
+		return DebuggerDispatcherHelper.ResolveSelectionCore(
+			mgr,
+			processId: ParseOptionalUInt32(arguments, "process_id"),
+			threadId: ParseOptionalUInt32(arguments, "thread_id"),
+			pausedOnly: requirePaused,
+			requireFrame: requireFrame);
+	}
+
+	static uint? ParseOptionalUInt32(Dictionary<string, object>? arguments, string key) {
+		if (arguments == null || !arguments.TryGetValue(key, out var value) || value == null)
+			return null;
+
+		if (value is JsonElement elem) {
+			if (elem.ValueKind == JsonValueKind.Number && elem.TryGetUInt32(out var number))
+				return number;
+			if (elem.ValueKind == JsonValueKind.String && uint.TryParse(elem.GetString(), out number))
+				return number;
+			return null;
+		}
+
+		return uint.TryParse(value.ToString(), out var parsed) ? parsed : (uint?)null;
 	}
 
 	// ── Exception breakpoints ─────────────────────────────────────────────────

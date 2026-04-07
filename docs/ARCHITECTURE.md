@@ -132,13 +132,13 @@ The dnSpy MCP Server implements a **Model Context Protocol (MCP)** server that e
 - `ContinueDebugger()` / `BreakDebugger()` / `StopDebugging()` - Execution control
 - `StepOver()` / `StepInto()` / `StepOut()` - Single-step; delegates to `StepImpl()` which posts `DbgStepper.Step(kind)` on the WPF Dispatcher and blocks the MCP thread on a `ManualResetEventSlim` until `StepComplete` fires
 - `GetCurrentLocation()` - Read top-frame token/offset/module without stepping; runs on Dispatcher
-- `WaitForPause()` - 100 ms polling loop until any process enters `Paused` state
+- `WaitForPause()` - 100 ms polling loop until a paused process exposes a usable paused thread
 - `StartDebugging()` - Launch .NET EXE under dnSpy debugger (configurable break kind)
 - `AttachToProcess()` - Attach to running .NET process by PID
 
 **Private helpers**:
-- `ResolveThread(mgr, args)` - Resolve thread by explicit `thread_id`, `process_id` filter, current thread, or first paused thread
-- `StepImpl(args, kind)` - Shared stepping logic with timeout and `StepComplete` async bridge
+- `ResolveThreadSelectionCore(mgr, args)` - Resolve process/thread by explicit `thread_id`, `process_id` filter, current thread, or first paused thread via dispatcher-backed selection
+- `StepImpl(args, kind)` - Shared stepping logic with dispatcher-side thread resolution, timeout handling, and `StepComplete` async bridge
 
 ---
 

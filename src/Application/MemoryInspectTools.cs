@@ -71,29 +71,34 @@ namespace dnSpy.MCP.Server.Application {
 			}
 
 			int? filterPid = null;
-			if (arguments != null && arguments.TryGetValue("process_id", out var pidObj) &&
-				pidObj is JsonElement pidElem && pidElem.TryGetInt32(out var pidInt))
-				filterPid = pidInt;
+			if (arguments != null && arguments.TryGetValue("process_id", out var pidObj)) {
+				if (pidObj is JsonElement pidElem && pidElem.TryGetInt32(out var pidInt))
+					filterPid = pidInt;
+				else if (int.TryParse(pidObj?.ToString(), out var pidInt2))
+					filterPid = pidInt2;
+			}
 
 			// All evaluation must happen on the UI/debugger dispatcher thread
-			return System.Windows.Application.Current.Dispatcher.Invoke(() => {
-				var process = filterPid.HasValue
-					? mgr.Processes.FirstOrDefault(p => p.Id == filterPid.Value)
-					: mgr.Processes.FirstOrDefault(p => p.State == DbgProcessState.Paused)
-					  ?? mgr.Processes.FirstOrDefault();
-
+			return DebuggerDispatcherHelper.Invoke(() => {
+				var selection = DebuggerDispatcherHelper.ResolveSelectionCore(
+					mgr,
+					processId: filterPid.HasValue ? (uint?)filterPid.Value : null,
+					pausedOnly: true,
+					requireFrame: true);
+				var process = selection.Process;
 				if (process == null)
-					throw new InvalidOperationException("No debugged process found.");
+					throw new InvalidOperationException("No paused debugged process found.");
 
 				if (process.State != DbgProcessState.Paused)
 					throw new InvalidOperationException(
 						$"Process {process.Id} is not paused. Set a breakpoint and wait for it to hit.");
 
-				// Find current thread (prefer the one with a stack)
-				var thread = process.Threads.FirstOrDefault(t => t.GetTopStackFrame() != null)
-							 ?? process.Threads.FirstOrDefault();
+				var thread = selection.Thread;
 				if (thread == null)
-					throw new InvalidOperationException("No threads found in the process.");
+					throw new InvalidOperationException(
+						selection.ThreadCount == 0
+							? "No threads found in the paused process."
+							: "The paused process has threads, but dnSpy has not published a usable stack frame yet.");
 
 				// Get frames
 				var frames = thread.GetFrames(frameIndex + 1);
@@ -215,9 +220,12 @@ namespace dnSpy.MCP.Server.Application {
 		}
 
 		int? filterPid = null;
-		if (arguments.TryGetValue("process_id", out var pidObj2) &&
-			pidObj2 is JsonElement pidElem2 && pidElem2.TryGetInt32(out var pidInt))
-			filterPid = pidInt;
+		if (arguments.TryGetValue("process_id", out var pidObj2)) {
+			if (pidObj2 is JsonElement pidElem2 && pidElem2.TryGetInt32(out var pidInt))
+				filterPid = pidInt;
+			else if (int.TryParse(pidObj2?.ToString(), out var pidInt2))
+				filterPid = pidInt2;
+		}
 
 		int funcEvalTimeout = 5;
 		if (arguments.TryGetValue("func_eval_timeout_seconds", out var tsoObj)) {
@@ -225,22 +233,25 @@ namespace dnSpy.MCP.Server.Application {
 			else if (int.TryParse(tsoObj?.ToString(), out var tso2)) funcEvalTimeout = Math.Max(1, tso2);
 		}
 
-		return System.Windows.Application.Current.Dispatcher.Invoke(() => {
-			var process = filterPid.HasValue
-				? mgr.Processes.FirstOrDefault(p => p.Id == filterPid.Value)
-				: mgr.Processes.FirstOrDefault(p => p.State == DbgProcessState.Paused)
-				  ?? mgr.Processes.FirstOrDefault();
-
+		return DebuggerDispatcherHelper.Invoke(() => {
+			var selection = DebuggerDispatcherHelper.ResolveSelectionCore(
+				mgr,
+				processId: filterPid.HasValue ? (uint?)filterPid.Value : null,
+				pausedOnly: true,
+				requireFrame: true);
+			var process = selection.Process;
 			if (process == null)
-				throw new InvalidOperationException("No debugged process found.");
+				throw new InvalidOperationException("No paused debugged process found.");
 			if (process.State != DbgProcessState.Paused)
 				throw new InvalidOperationException(
 					$"Process {process.Id} is not paused. Use break_debugger or wait for a breakpoint.");
 
-			var thread = process.Threads.FirstOrDefault(t => t.GetTopStackFrame() != null)
-			             ?? process.Threads.FirstOrDefault();
+			var thread = selection.Thread;
 			if (thread == null)
-				throw new InvalidOperationException("No threads found in the process.");
+				throw new InvalidOperationException(
+					selection.ThreadCount == 0
+						? "No threads found in the paused process."
+						: "The paused process has threads, but dnSpy has not published a usable stack frame yet.");
 
 			var frames = thread.GetFrames(frameIndex + 1);
 			if (frames.Length <= frameIndex)

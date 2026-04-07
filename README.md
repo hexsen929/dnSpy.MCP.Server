@@ -659,7 +659,7 @@ Interact with dnSpy's integrated debugger. Most tools require an active debug se
 
 | Tool | Description | Required params | Optional params |
 |------|-------------|-----------------|-----------------|
-| `get_debugger_state` | Current state: `IsDebugging`, `IsRunning`, process list with thread/runtime counts | — | — |
+| `get_debugger_state` | Current debugger state with effective running/paused status, raw manager running flag, and process list with thread/runtime counts | — | — |
 | `list_breakpoints` | All registered code breakpoints with enabled state, bound count, and location | — | — |
 | `set_breakpoint` | Set a breakpoint at a method entry point or specific IL offset. Supports alias-aware conditions such as `$arg0`, `$local0`, `arg(0)`, `local(0)`, `field("Name")`, and `memberByToken("0x06001234")` | `assembly_name`, `type_full_name`, `method_name` | `il_offset`, `condition`, `file_path` |
 | `set_breakpoint_ex` | Extended compatibility alias of `set_breakpoint` with the same alias-aware condition support | `assembly_name`, `type_full_name`, `method_name` | `il_offset`, `condition`, `file_path` |
@@ -669,13 +669,13 @@ Interact with dnSpy's integrated debugger. Most tools require an active debug se
 | `break_debugger` | Pause all running processes (`BreakAll`). `safe_pause=true` uses dnSpy-managed pause only and never calls `Debugger.Break()` | — | `safe_pause` |
 | `stop_debugging` | Terminate all active debug sessions | — | — |
 | `get_call_stack` | Call stack of the currently selected (or first paused) thread — up to 50 frames | — | — |
-| `step_over` | Step over the current statement. Blocks until the step completes (or timeout). Returns the new execution location (token, IL offset, module). | — | `thread_id`, `process_id`, `timeout_seconds` |
+| `step_over` | Step over the current statement. Resolves the paused thread on the debugger dispatcher, blocks until the step completes (or timeout), and returns the new execution location. | — | `thread_id`, `process_id`, `timeout_seconds` |
 | `step_into` | Step into the next called method. Same blocking behaviour as `step_over`. | — | `thread_id`, `process_id`, `timeout_seconds` |
 | `step_out` | Run until the current method returns to its caller. | — | `thread_id`, `process_id`, `timeout_seconds` |
-| `get_current_location` | Read the top-frame execution location without stepping. Requires paused debugger. | — | `thread_id`, `process_id` |
-| `wait_for_pause` | Poll until any process becomes paused (after a `continue_debugger` or `start_debugging`). Returns process info on pause, throws `TimeoutException` otherwise. | — | `timeout_seconds` |
-| `start_debugging` | Launch an EXE under the dnSpy debugger. By default breaks at `EntryPoint` (after the module `.cctor` has run, so ConfuserEx-decrypted bodies are in RAM) | `exe_path` | `arguments`, `working_directory`, `break_kind` |
-| `attach_to_process` | Attach the dnSpy debugger to a running .NET process by PID | `process_id` | — |
+| `get_current_location` | Read the top-frame execution location without stepping. Requires a paused debugger with a usable stack frame. | — | `thread_id`, `process_id` |
+| `wait_for_pause` | Poll until a paused process exposes a usable paused thread (after a `continue_debugger`, `break_debugger`, or `start_debugging`). Returns process and thread info on pause, throws `TimeoutException` otherwise. | — | `timeout_seconds` |
+| `start_debugging` | Launch an EXE under the dnSpy debugger. By default breaks at `EntryPoint` (after the module `.cctor` has run, so ConfuserEx-decrypted bodies are in RAM). Response also reports whether a visible session appeared shortly after launch. | `exe_path` | `arguments`, `working_directory`, `break_kind` |
+| `attach_to_process` | Attach the dnSpy debugger to a running .NET process by PID. Response reports whether a visible session appeared shortly after attach. | `process_id` | — |
 | `set_exception_breakpoint` | Break when a specific exception type is thrown. Configurable first-chance (before catch) and second-chance (unhandled). Default: first-chance enabled. | `exception_type` | `first_chance`, `second_chance`, `category` |
 | `remove_exception_breakpoint` | Remove an exception breakpoint for a specific exception type | `exception_type` | `category` |
 | `list_exception_breakpoints` | List all active exception breakpoints (those with at least one chance flag set) | — | — |
@@ -701,7 +701,7 @@ Interact with dnSpy's integrated debugger. Most tools require an active debug se
 
 > **Tip**: Use `start_debugging` + `break_kind: EntryPoint` for ConfuserEx-packed assemblies — method bodies are decrypted by the time the breakpoint hits. Then use `dump_module_from_memory` or `unpack_from_memory`.
 
-> **Step workflow**: `break_debugger` (or wait for a BP) → `get_current_location` → `step_over` / `step_into` → inspect with `get_local_variables` or `eval_expression` → repeat.
+> **Step workflow**: `break_debugger` / `wait_for_pause` → `get_current_location` → `step_over` / `step_into` → inspect with `get_local_variables` or `eval_expression` → repeat.
 
 ---
 
@@ -756,8 +756,8 @@ Extract raw bytes from a debugged process. Requires an active debug session unle
 | `dump_module_from_memory` | Extract a .NET module from process memory to a file (preserves file layout when possible) | `module_name`, `output_path` | `process_id` |
 | `read_process_memory` | Read up to 64 KB from any process address; returns a formatted hex dump and Base64 | `address`, `size` | `process_id` |
 | `write_process_memory` | Write bytes to a process address (hot-patching). Accepts `bytes_base64` (base64) or `hex_bytes` (e.g. `"90 90 C3"`). Useful for disabling checks without touching the binary on disk. | `address`, (`bytes_base64` or `hex_bytes`) | `process_id` |
-| `get_local_variables` | Read local variables and parameters from a paused stack frame; returns primitives, strings, and addresses for complex objects | — | `frame_index`, `process_id` |
-| `eval_expression` | Evaluate a C# expression in the current paused frame context (Watch window equivalent). Returns typed value: primitive, string, or object address | `expression` | `frame_index`, `process_id`, `func_eval_timeout_seconds` |
+| `get_local_variables` | Read local variables and parameters from a paused stack frame; resolves the paused thread on the debugger dispatcher and returns primitives, strings, and addresses for complex objects | — | `frame_index`, `process_id` |
+| `eval_expression` | Evaluate a C# expression in the current paused frame context (Watch window equivalent). Uses the same paused-thread resolution path as `get_local_variables`. | `expression` | `frame_index`, `process_id`, `func_eval_timeout_seconds` |
 | `get_pe_sections` | List PE section headers of a module in process memory (names, virtual addresses, sizes, characteristics) | `module_name` | `process_id` |
 | `dump_pe_section` | Extract a specific PE section (e.g. `.text`, `.data`, `.rsrc`) from a module in process memory; writes to file and/or returns Base64 | `module_name`, `section_name` | `output_path`, `process_id` |
 | `dump_module_unpacked` | Dump a full module with memory-to-file layout conversion (produces a valid loadable PE). Handles .NET, native, and mixed-mode modules | `module_name`, `output_path` | `process_id` |

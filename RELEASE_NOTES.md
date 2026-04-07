@@ -2,6 +2,19 @@
 
 ---
 
+## v1.8.28 — 2026-04-07
+
+### Fixed: debugger pause/session stability
+
+- debugger state, pause detection, and thread resolution now run on dnSpy's WPF debugger dispatcher, so MCP no longer mixes stale background-thread state with UI-thread stepping/evaluation
+- `wait_for_pause` now waits for a usable paused thread instead of returning a transient paused process with `ThreadCount = 0`
+- `get_current_location`, `get_call_stack`, `step_over` / `step_into` / `step_out`, `get_local_variables`, and `eval_expression` now share the same paused-thread resolution path
+- `step_*` no longer rejects valid paused sessions just because `DbgManager.IsRunning` stayed `true` while the actual process was paused
+- `start_debugging`, `attach_to_process`, and `stop_debugging` now report debugger lifecycle state more accurately instead of racing the async session manager
+- `suspend_threads` / `resume_threads` now enumerate both process-level and runtime-level thread collections instead of only `process.Threads`
+
+---
+
 ## v1.8.27 — 2026-04-07
 
 ### Fixed: schema-level duplicate-assembly disambiguation
