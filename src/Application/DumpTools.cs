@@ -62,7 +62,8 @@ namespace dnSpy.MCP.Server.Application {
 					return new CallToolResult {
 						Content = new List<ToolContent> { new ToolContent {
 							Text = "Debugger is not active. Start a debug session first."
-						}}
+						}},
+						IsError = true
 					};
 				}
 

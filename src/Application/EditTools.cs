@@ -401,7 +401,7 @@ namespace dnSpy.MCP.Server.Application {
 			if (!arguments.TryGetValue("type_full_name", out var typeNameObj))
 				throw new ArgumentException("type_full_name is required");
 
-			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
+			var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments, allowGenericFilePath: false));
 			if (assembly == null)
 				throw new ArgumentException($"Assembly not found: {asmNameObj}");
 

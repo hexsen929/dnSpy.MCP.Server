@@ -571,12 +571,14 @@ namespace dnSpy.MCP.Server.Application {
 					}
 					if (!mgr.IsDebugging) {
 						return new CallToolResult {
-							Content = new List<ToolContent> { new ToolContent { Text = "Debugger is not active. Start debugging first." } }
+							Content = new List<ToolContent> { new ToolContent { Text = "Debugger is not active. Start debugging first." } },
+							IsError = true
 						};
 					}
 					if (waitResult.TimedOut || waitResult.NoActiveSession) {
 						return new CallToolResult {
-							Content = new List<ToolContent> { new ToolContent { Text = DescribePausedThreadUnavailable(waitResult.LastPauseSelection, null) } }
+							Content = new List<ToolContent> { new ToolContent { Text = DescribePausedThreadUnavailable(waitResult.LastPauseSelection, null) } },
+							IsError = true
 						};
 					}
 
@@ -584,7 +586,8 @@ namespace dnSpy.MCP.Server.Application {
 					var currentThread = selection.Thread;
 					if (currentThread == null) {
 						return new CallToolResult {
-							Content = new List<ToolContent> { new ToolContent { Text = selection.Process == null ? "No paused process found. Debugger may still be running. Use break_debugger first." : (selection.ProcessIsPaused ? "No usable paused thread is available yet." : $"Process {selection.Process.Id} is not paused.") } }
+							Content = new List<ToolContent> { new ToolContent { Text = selection.Process == null ? "No paused process found. Debugger may still be running. Use break_debugger first." : (selection.ProcessIsPaused ? "No usable paused thread is available yet." : $"Process {selection.Process.Id} is not paused.") } },
+							IsError = true
 						};
 					}
 

@@ -89,8 +89,22 @@ namespace dnSpy.MCP.Server.Application
                 code = codeVal?.ToString();
             if (string.IsNullOrEmpty(code))
                 throw new ArgumentException("'code' is required.");
-            int timeoutSeconds = (args != null && args.TryGetValue("timeout_seconds", out var to))
-                ? Convert.ToInt32(to) : 30;
+            int timeoutSeconds = 30;
+            if (args != null && args.TryGetValue("timeout_seconds", out var timeoutObj))
+            {
+                if (timeoutObj is JsonElement timeoutElem)
+                {
+                    if (timeoutElem.ValueKind == JsonValueKind.Number && timeoutElem.TryGetInt32(out var parsedTimeout))
+                        timeoutSeconds = parsedTimeout;
+                    else if (timeoutElem.ValueKind == JsonValueKind.String && int.TryParse(timeoutElem.GetString(), out parsedTimeout))
+                        timeoutSeconds = parsedTimeout;
+                }
+                else if (int.TryParse(timeoutObj?.ToString(), out var parsedTimeout))
+                {
+                    timeoutSeconds = parsedTimeout;
+                }
+            }
+            timeoutSeconds = Math.Max(1, timeoutSeconds);
 
             var globals = BuildGlobals();
             var opts = BuildScriptOptions();
