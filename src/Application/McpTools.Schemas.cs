@@ -1488,11 +1488,13 @@ namespace dnSpy.MCP.Server.Application
             },
             new ToolInfo {
                 Name = "wait_for_pause",
-                Description = "Poll until any debugged process becomes paused (e.g. after continue_debugger and a breakpoint hits). Returns process info once paused, or throws TimeoutException.",
+                Description = "Poll until a debugged process exposes a usable paused thread (and, by default, a stack frame) after continue_debugger or a breakpoint hit. Returns pause/thread info once ready, or throws TimeoutException.",
                 InputSchema = new Dictionary<string, object> {
                     ["type"] = "object",
                     ["properties"] = new Dictionary<string, object> {
-                        ["timeout_seconds"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Max seconds to wait for a pause (default 30)" }
+                        ["timeout_seconds"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Max seconds to wait for a pause (default 30)" },
+                        ["process_id"] = new Dictionary<string, object> { ["type"] = "integer", ["description"] = "Optional: PID to target when multiple processes are debugged" },
+                        ["require_stack_frame"] = new Dictionary<string, object> { ["type"] = "boolean", ["description"] = "Wait for a usable stack frame before succeeding (default true). Set false to accept a paused thread without frames." }
                     },
                     ["required"] = new List<string>()
                 }

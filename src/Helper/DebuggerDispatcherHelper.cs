@@ -33,6 +33,12 @@ namespace dnSpy.MCP.Server.Helper {
 		public static DebuggerStateSnapshot CaptureState(DbgManager mgr) =>
 			Invoke(() => CaptureStateCore(mgr));
 
+		public static DebuggerPauseSnapshot CapturePausedSelection(
+			DbgManager mgr,
+			uint? processId = null,
+			bool requireFrame = false) =>
+			Invoke(() => CapturePausedSelectionCore(mgr, processId, requireFrame));
+
 		public static DebuggerStateSnapshot CaptureStateCore(DbgManager mgr) {
 			if (mgr == null)
 				throw new ArgumentNullException(nameof(mgr));
@@ -52,6 +58,28 @@ namespace dnSpy.MCP.Server.Helper {
 				ManagerIsRunning = mgr.IsRunning,
 				EffectiveIsRunning = processes.Any(p => p.IsRunning),
 				Processes = processes
+			};
+		}
+
+		public static DebuggerPauseSnapshot CapturePausedSelectionCore(
+			DbgManager mgr,
+			uint? processId = null,
+			bool requireFrame = false) {
+			if (mgr == null)
+				throw new ArgumentNullException(nameof(mgr));
+
+			if (!mgr.IsDebugging)
+				return new DebuggerPauseSnapshot { IsDebugging = false };
+
+			var selection = ResolveSelectionCore(mgr, processId: processId, pausedOnly: true, requireFrame: requireFrame);
+			var thread = selection.Thread;
+			return new DebuggerPauseSnapshot {
+				IsDebugging = true,
+				ProcessId = selection.Process != null ? (int?)selection.Process.Id : null,
+				ProcessIsPaused = selection.ProcessIsPaused,
+				ThreadCount = Math.Max(selection.ThreadCount, thread != null ? 1 : 0),
+				ThreadId = thread != null ? (int?)thread.Id : null,
+				HasStackFrame = selection.HasStackFrame
 			};
 		}
 
@@ -239,6 +267,15 @@ namespace dnSpy.MCP.Server.Helper {
 		public bool EffectiveIsRunning { get; set; }
 		public List<DebuggerProcessSnapshot> Processes { get; set; } = new List<DebuggerProcessSnapshot>();
 		public int ProcessCount => Processes.Count;
+	}
+
+	sealed class DebuggerPauseSnapshot {
+		public bool IsDebugging { get; set; }
+		public int? ProcessId { get; set; }
+		public bool ProcessIsPaused { get; set; }
+		public int ThreadCount { get; set; }
+		public int? ThreadId { get; set; }
+		public bool HasStackFrame { get; set; }
 	}
 
 	sealed class DebuggerProcessSnapshot {

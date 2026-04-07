@@ -399,8 +399,30 @@ namespace dnSpy.MCP.Server.Application {
 				if (!snapshot.IsDebugging || snapshot.ProcessCount == 0)
 					throw new InvalidOperationException("No active debug session.");
 				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.RunAll());
+
+				var deadline = DateTime.UtcNow.AddSeconds(2);
+				while (DateTime.UtcNow < deadline) {
+					snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
+					if (!snapshot.IsDebugging || snapshot.ProcessCount == 0) {
+						return new CallToolResult {
+							Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed, and the debug session ended." } }
+						};
+					}
+					if (!snapshot.Processes.Any(p => string.Equals(p.State, DbgProcessState.Paused.ToString(), StringComparison.OrdinalIgnoreCase))) {
+						return new CallToolResult {
+							Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed (RunAll called)." } }
+						};
+					}
+					Thread.Sleep(100);
+				}
+
+				var note = JsonSerializer.Serialize(new {
+					Resumed = false,
+					ProcessCount = snapshot.ProcessCount,
+					Note = "RunAll was issued, but at least one process still reports a paused state. Retry get_debugger_state in a moment."
+				}, new JsonSerializerOptions { WriteIndented = true });
 				return new CallToolResult {
-					Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed (RunAll called)." } }
+					Content = new List<ToolContent> { new ToolContent { Text = note } }
 				};
 			}
 			catch (Exception ex) {
@@ -427,9 +449,27 @@ namespace dnSpy.MCP.Server.Application {
 				}
 
 				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.BreakAll());
+				var deadline = DateTime.UtcNow.AddSeconds(3);
+				DebuggerPauseSnapshot? paused = null;
+				while (DateTime.UtcNow < deadline) {
+					paused = DebuggerDispatcherHelper.CapturePausedSelection(dbgManager.Value, requireFrame: false);
+					if (!paused.IsDebugging)
+						throw new InvalidOperationException("The debug session ended while trying to pause the debugger.");
+					if (paused.ProcessId.HasValue && paused.ProcessIsPaused)
+						break;
+					Thread.Sleep(100);
+				}
+
+				if (paused == null || !paused.ProcessId.HasValue || !paused.ProcessIsPaused)
+					throw new TimeoutException("BreakAll was issued, but no paused process became available within 3 seconds.");
+
 				var json = JsonSerializer.Serialize(new {
 					Success = true,
 					Strategy = safePause ? "break_all_safe_pause" : "break_all",
+					ProcessId = paused.ProcessId,
+					ThreadCount = paused.ThreadCount,
+					ThreadId = paused.ThreadId,
+					HasStackFrame = paused.HasStackFrame,
 					Note = safePause
 						? "safe_pause requested. dnSpy MCP uses DbgManager.BreakAll() and does not call Debugger.Break()."
 						: "Debugger paused using DbgManager.BreakAll()."
@@ -761,30 +801,30 @@ namespace dnSpy.MCP.Server.Application {
 			else if (int.TryParse(tso?.ToString(), out var ti2)) timeoutSeconds = Math.Max(1, ti2);
 		}
 
+		uint? processId = ParseOptionalUInt32(arguments, "process_id");
+		bool requireStackFrame = true;
+		if (arguments != null) {
+			if (arguments.TryGetValue("require_stack_frame", out var rsf))
+				requireStackFrame = ParseOptionalBool(rsf) ?? true;
+			else if (arguments.TryGetValue("require_frame", out var rf))
+				requireStackFrame = ParseOptionalBool(rf) ?? true;
+		}
+
 		var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+		DebuggerPauseSnapshot? lastObserved = null;
 		while (DateTime.UtcNow < deadline) {
-			var paused = DebuggerDispatcherHelper.Invoke(() => {
-				if (!mgr.IsDebugging)
-					return (IsDebugging: false, ProcessId: (int?)null, ThreadCount: 0, ThreadId: (int?)null);
-
-				var selection = ResolveThreadSelectionCore(mgr, null, requirePaused: true, requireFrame: false);
-				return (
-					IsDebugging: true,
-					ProcessId: selection.Process != null ? (int?)selection.Process.Id : null,
-					ThreadCount: selection.ThreadCount,
-					ThreadId: selection.Thread != null ? (int?)selection.Thread.Id : null
-				);
-			});
-
+			var paused = DebuggerDispatcherHelper.CapturePausedSelection(mgr, processId: processId, requireFrame: requireStackFrame);
+			lastObserved = paused;
 			if (!paused.IsDebugging)
 				throw new InvalidOperationException("The debug session ended before a paused thread became available.");
 
-			if (paused.ProcessId.HasValue && paused.ThreadId.HasValue) {
+			if (paused.ProcessId.HasValue && paused.ProcessIsPaused && paused.ThreadId.HasValue && (!requireStackFrame || paused.HasStackFrame)) {
 				var json = JsonSerializer.Serialize(new {
 					Paused      = true,
 					ProcessId   = paused.ProcessId.Value,
 					ThreadCount = paused.ThreadCount,
-					ThreadId    = paused.ThreadId.Value
+					ThreadId    = paused.ThreadId.Value,
+					HasStackFrame = paused.HasStackFrame
 				}, new JsonSerializerOptions { WriteIndented = true });
 				return new CallToolResult {
 					Content = new List<ToolContent> { new ToolContent { Text = json } }
@@ -792,6 +832,18 @@ namespace dnSpy.MCP.Server.Application {
 			}
 			Thread.Sleep(100);
 		}
+
+		if (lastObserved != null && lastObserved.ProcessId.HasValue) {
+			if (!lastObserved.ProcessIsPaused)
+				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} did not reach a paused state within {timeoutSeconds}s.");
+			if (lastObserved.ThreadCount == 0)
+				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} paused, but no debug threads became available within {timeoutSeconds}s.");
+			if (!lastObserved.ThreadId.HasValue)
+				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} paused, but dnSpy did not publish a paused thread within {timeoutSeconds}s.");
+			if (requireStackFrame && !lastObserved.HasStackFrame)
+				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} paused and thread {lastObserved.ThreadId.Value} exists, but dnSpy did not publish a usable stack frame within {timeoutSeconds}s.");
+		}
+
 		throw new TimeoutException($"Debugger did not pause within {timeoutSeconds}s.");
 	}
 
@@ -913,6 +965,21 @@ namespace dnSpy.MCP.Server.Application {
 		}
 
 		return uint.TryParse(value.ToString(), out var parsed) ? parsed : (uint?)null;
+	}
+
+	static bool? ParseOptionalBool(object? value) {
+		if (value == null)
+			return null;
+		if (value is JsonElement elem) {
+			if (elem.ValueKind == JsonValueKind.True)
+				return true;
+			if (elem.ValueKind == JsonValueKind.False)
+				return false;
+			if (elem.ValueKind == JsonValueKind.String && bool.TryParse(elem.GetString(), out var parsedString))
+				return parsedString;
+			return null;
+		}
+		return bool.TryParse(value.ToString(), out var parsed) ? parsed : (bool?)null;
 	}
 
 	// ── Exception breakpoints ─────────────────────────────────────────────────

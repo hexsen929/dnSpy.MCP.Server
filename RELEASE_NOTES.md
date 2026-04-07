@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.31 — 2026-04-07
+
+### Fixed: debugger transition races
+
+- `wait_for_pause` now waits for a usable paused stack frame by default and reports whether the failure was `session ended`, `paused process without threads`, or `paused thread without a frame`
+- `break_debugger` and `continue_debugger` now confirm the post-call debugger state before returning, reducing immediate race failures in pause/resume automation
+- `get_local_variables` and `eval_expression` no longer reject valid sessions using a stale pre-dispatch `DbgManager.IsDebugging` read
+
+---
+
 ## v1.8.30 — 2026-04-07
 
 ### Fixed: .NET Framework wrapper/reference edge cases

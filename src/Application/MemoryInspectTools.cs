@@ -61,8 +61,6 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult GetLocalVariables(Dictionary<string, object>? arguments) {
 			var mgr = dbgManager.Value;
-			if (!mgr.IsDebugging)
-				throw new InvalidOperationException("Debugger is not active. Start a debug session first.");
 
 			int frameIndex = 0;
 			if (arguments != null && arguments.TryGetValue("frame_index", out var fiObj)) {
@@ -210,8 +208,6 @@ namespace dnSpy.MCP.Server.Application {
 		var expression = exprObj?.ToString() ?? "";
 
 		var mgr = dbgManager.Value;
-		if (!mgr.IsDebugging)
-			throw new InvalidOperationException("Debugger is not active. Start a debug session first.");
 
 		int frameIndex = 0;
 		if (arguments.TryGetValue("frame_index", out var fiObj)) {

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.31] - 2026-04-07
+
+### Fixed
+- `wait_for_pause` now waits for a usable paused stack frame by default, distinguishes `paused process without threads`, `thread exists without a stack frame`, and `session ended while waiting`, and supports optional `process_id` / `require_stack_frame` filters.
+- `break_debugger` and `continue_debugger` now verify the post-call debugger state instead of returning immediate success before the engine finishes transitioning.
+- `get_local_variables` and `eval_expression` no longer use a stale pre-dispatch `DbgManager.IsDebugging` check, reducing false `Debugger is not active` failures during pause-state transitions.
+
 ## [1.8.30] - 2026-04-07
 
 ### Fixed
