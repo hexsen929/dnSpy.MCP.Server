@@ -1089,7 +1089,7 @@ namespace dnSpy.MCP.Server.Application {
 		if (!arguments.TryGetValue("file_path", out var filePathObj))
 			throw new ArgumentException("file_path is required");
 
-		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments));
+		var assembly = FindAssemblyByName(asmNameObj.ToString() ?? "", GetOptionalFilePath(arguments, allowGenericFilePath: false));
 		if (assembly == null)
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 

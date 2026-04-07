@@ -5,10 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.34] - 2026-04-07
+
+### Fixed
+- `add_resource` now correctly ignores the resource source `file_path` when resolving the target loaded assembly, so resource embedding works again when `assembly_name` is used without an explicit `assembly_file_path`.
+
 ## [1.8.33] - 2026-04-07
 
 ### Fixed
-- `add_resource` now treats `file_path` only as the source file to embed and keeps assembly disambiguation on `assembly_file_path` / `loaded_file_path`, fixing false `Assembly not found` errors when embedding resources.
 - `run_script` now parses `timeout_seconds` from MCP JSON arguments safely instead of crashing on `JsonElement` values.
 - `get_call_stack` and `list_runtime_modules` now mark inactive-debugger / no-paused-thread responses as MCP errors (`IsError=true`) so clients can detect the failure state correctly.
 

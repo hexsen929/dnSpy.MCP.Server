@@ -2,11 +2,18 @@
 
 ---
 
+## v1.8.34 — 2026-04-07
+
+### Fixed: add_resource assembly resolution
+
+- `add_resource` now ignores the resource source `file_path` when resolving the target loaded assembly, so embedding into a loaded assembly works again without needing a separate `assembly_file_path`
+
+---
+
 ## v1.8.33 — 2026-04-07
 
 ### Fixed: resource embedding / script args / error signaling
 
-- `add_resource` no longer misreads the resource source `file_path` as an assembly disambiguation path, so embedding a file into a loaded assembly works again
 - `run_script` now accepts normal MCP JSON `timeout_seconds` values without throwing a `JsonElement` cast error
 - `get_call_stack` and `list_runtime_modules` now return proper MCP errors when no active paused debugger context exists, instead of looking like successful calls with plain-text failure messages
 
