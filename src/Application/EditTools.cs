@@ -287,9 +287,26 @@ namespace dnSpy.MCP.Server.Application {
 				throw new ArgumentException("assembly_name is required");
 
 			var assemblyName = asmNameObj.ToString() ?? "";
-			var assembly = FindAssemblyByName(assemblyName, GetOptionalFilePath(arguments));
+			var filePath = GetOptionalFilePath(arguments);
+			if (string.IsNullOrWhiteSpace(filePath)) {
+				var matchingDocuments = LoadedDocumentsHelper.FindDocuments(documentService, assemblyName)
+					.Where(d => d.AssemblyDef != null)
+					.ToList();
+				if (matchingDocuments.Count > 1) {
+					var candidates = string.Join(", ", matchingDocuments
+						.Select(d => string.IsNullOrWhiteSpace(d.Filename) ? "<no path>" : d.Filename)
+						.Distinct(StringComparer.OrdinalIgnoreCase));
+					throw new ArgumentException(
+						$"Multiple loaded assemblies match '{assemblyName}'. " +
+						$"Pass file_path to disambiguate. Candidates: {candidates}");
+				}
+			}
+
+			var assembly = FindAssemblyByName(assemblyName, filePath);
 			if (assembly == null)
-				throw new ArgumentException($"Assembly not found: {assemblyName}");
+				throw new ArgumentException(string.IsNullOrWhiteSpace(filePath)
+					? $"Assembly not found: {assemblyName}"
+					: $"Assembly not found: {assemblyName} (file_path={filePath})");
 
 			string? outputPath = null;
 			if (arguments.TryGetValue("output_path", out var outputPathObj))

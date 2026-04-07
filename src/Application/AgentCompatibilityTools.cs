@@ -421,7 +421,7 @@ using System.Threading.Tasks;
 				return null;
 
 			return
-$@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.EventType.ToTypeSig(), contextMethod)} {EscapeIdentifier(evt.Name.String)}
+$@"public{(accessor.IsStatic ? " static" : string.Empty)} event {ToCSharpTypeName(evt.EventType.ToTypeSig(), contextMethod)} {EscapeIdentifier(evt.Name.String)}
 {{
 	add {{ }}
 	remove {{ }}
@@ -609,16 +609,17 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 				AddDotNetReferencePack(paths, targetFramework);
 			}
 			else {
-				AddPath(typeof(object).Assembly.Location);
-				AddPath(typeof(Enumerable).Assembly.Location);
-				AddPath(typeof(Uri).Assembly.Location);
-				AddPath(typeof(System.Runtime.GCSettings).Assembly.Location);
-				AddPath(typeof(System.Threading.Tasks.Task).Assembly.Location);
-				AddPath(typeof(System.Threading.CancellationToken).Assembly.Location);
+				AddNetFrameworkReferenceAssemblies(paths, targetFramework);
 			}
+
+			var allowedAssemblyNames = modernTarget
+				? null
+				: BuildCompilationAssemblyClosure(targetModule);
 
 			foreach (var document in LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)) {
 				if (ShouldSkipLoadedDocumentReference(document, modernTarget))
+					continue;
+				if (allowedAssemblyNames != null && !ShouldIncludeLoadedDocumentReference(document, allowedAssemblyNames))
 					continue;
 				AddPath(document.Filename);
 				try {
@@ -674,8 +675,12 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 		}
 
 		static bool ShouldSkipLoadedDocumentReference(IDsDocument document, bool modernTarget) {
+			if (!IsManagedDocument(document))
+				return true;
+
+			var assemblyName = document.AssemblyDef?.Name.String ?? document.ModuleDef?.Assembly?.Name.String;
 			if (!modernTarget)
-				return false;
+				return IsFrameworkAssemblyName(assemblyName) || IsFrameworkReferencePath(document.Filename) || IsFrameworkReferencePath(GetModuleLocation(document));
 
 			var filename = LoadedDocumentsHelper.NormalizePath(document.Filename);
 			if (IsFrameworkReferencePath(filename))
@@ -689,7 +694,57 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 			catch {
 			}
 
-			return IsFrameworkAssemblyName(document.AssemblyDef?.Name.String) && string.IsNullOrWhiteSpace(filename);
+			return IsFrameworkAssemblyName(assemblyName) && string.IsNullOrWhiteSpace(filename);
+		}
+
+		static bool IsManagedDocument(IDsDocument document) =>
+			document.AssemblyDef != null || document.ModuleDef?.Assembly != null;
+
+		static string? GetModuleLocation(IDsDocument document) {
+			try {
+				return document.ModuleDef?.Location;
+			}
+			catch {
+				return null;
+			}
+		}
+
+		bool ShouldIncludeLoadedDocumentReference(IDsDocument document, HashSet<string> allowedAssemblyNames) {
+			var assemblyName = document.AssemblyDef?.Name.String ?? document.ModuleDef?.Assembly?.Name.String;
+			return !string.IsNullOrWhiteSpace(assemblyName) && allowedAssemblyNames.Contains(assemblyName);
+		}
+
+		HashSet<string> BuildCompilationAssemblyClosure(ModuleDef targetModule) {
+			var closure = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var loadedByAssemblyName = LoadedDocumentsHelper.GetDocumentsSnapshot(documentService)
+				.Where(IsManagedDocument)
+				.GroupBy(d => d.AssemblyDef?.Name.String ?? d.ModuleDef?.Assembly?.Name.String ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+				.Where(g => !string.IsNullOrWhiteSpace(g.Key))
+				.ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+
+			var pending = new Queue<string>();
+			void EnqueueReferences(ModuleDef module) {
+				foreach (var reference in module.GetAssemblyRefs()) {
+					var name = reference.Name.String;
+					if (!string.IsNullOrWhiteSpace(name) && closure.Add(name))
+						pending.Enqueue(name);
+				}
+			}
+
+			EnqueueReferences(targetModule);
+			while (pending.Count > 0) {
+				var assemblyName = pending.Dequeue();
+				if (!loadedByAssemblyName.TryGetValue(assemblyName, out var matchingDocuments))
+					continue;
+
+				foreach (var document in matchingDocuments) {
+					var manifestModule = document.AssemblyDef?.ManifestModule ?? document.ModuleDef;
+					if (manifestModule != null)
+						EnqueueReferences(manifestModule);
+				}
+			}
+
+			return closure;
 		}
 
 		static bool IsFrameworkReferencePath(string? path) {
@@ -701,6 +756,48 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} {ToCSharpTypeName(evt.
 				normalized.IndexOf("\\dotnet\\shared\\Microsoft.NETCore.App\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
 				normalized.IndexOf("\\Reference Assemblies\\Microsoft\\Framework\\", StringComparison.OrdinalIgnoreCase) >= 0 ||
 				normalized.IndexOf("\\Windows\\Microsoft.NET\\Framework", StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		static void AddNetFrameworkReferenceAssemblies(HashSet<string> paths, string? targetFrameworkMoniker) {
+			var requestedVersion = GetNetFrameworkVersion(targetFrameworkMoniker);
+			foreach (var directory in GetNetFrameworkReferenceDirectories(requestedVersion)) {
+				if (!Directory.Exists(directory))
+					continue;
+
+				foreach (var file in Directory.GetFiles(directory, "*.dll"))
+					paths.Add(file);
+				if (paths.Count > 0)
+					return;
+			}
+		}
+
+		static string? GetNetFrameworkVersion(string? targetFrameworkMoniker) {
+			if (string.IsNullOrWhiteSpace(targetFrameworkMoniker))
+				return null;
+
+			var match = Regex.Match(targetFrameworkMoniker, @"Version=v(?<version>\d+(?:\.\d+)*)", RegexOptions.IgnoreCase);
+			return match.Success ? "v" + match.Groups["version"].Value : null;
+		}
+
+		static IEnumerable<string> GetNetFrameworkReferenceDirectories(string? requestedVersion) {
+			var versionCandidates = new List<string>();
+			if (!string.IsNullOrWhiteSpace(requestedVersion))
+				versionCandidates.Add(requestedVersion!);
+			versionCandidates.AddRange(new[] { "v4.8", "v4.7.2", "v4.7.1", "v4.7", "v4.6.2", "v4.6.1", "v4.6", "v4.5.2", "v4.5.1", "v4.5", "v4.0" });
+
+			var roots = new[] {
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Reference Assemblies", "Microsoft", "Framework", ".NETFramework"),
+				Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Reference Assemblies", "Microsoft", "Framework", ".NETFramework"),
+			};
+
+			foreach (var root in roots) {
+				foreach (var version in versionCandidates.Distinct(StringComparer.OrdinalIgnoreCase))
+					yield return Path.Combine(root, version);
+			}
+
+			var windowsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+			yield return Path.Combine(windowsFolder, "Microsoft.NET", "Framework64", "v4.0.30319");
+			yield return Path.Combine(windowsFolder, "Microsoft.NET", "Framework", "v4.0.30319");
 		}
 
 		static void AddTrustedPlatformAssemblyReferences(HashSet<string> paths) {

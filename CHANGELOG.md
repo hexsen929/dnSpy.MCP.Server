@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.29] - 2026-04-07
+
+### Fixed
+- `update_method_sourcecode` now compiles .NET Framework targets against curated .NET Framework reference assemblies instead of inheriting whatever host/runtime assemblies happen to be loaded, which avoids `mscorlib` / `System.Private.CoreLib` collisions and skips native/non-managed loaded documents during Roslyn compilation.
+- The generated source wrapper now emits real `event` declarations instead of property-like stubs, fixing wrapper compilation failures on types that expose events.
+- `save_assembly` now detects duplicate loaded assemblies when `file_path` is omitted and returns an explicit disambiguation error instead of silently picking an arbitrary loaded copy.
+
 ## [1.8.28] - 2026-04-07
 
 ### Fixed

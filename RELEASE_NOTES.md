@@ -2,6 +2,16 @@
 
 ---
 
+## v1.8.29 — 2026-04-07
+
+### Fixed: source patch compilation and save disambiguation
+
+- `update_method_sourcecode` now builds .NET Framework targets against curated .NET Framework reference assemblies instead of mixing host/runtime assemblies, which removes the `mscorlib` / `System.Private.CoreLib` collision path and skips native/non-managed loaded documents during Roslyn reference collection
+- the generated wrapper now emits real `event` declarations, fixing patch compilation on types that expose events
+- `save_assembly` now fails fast with a clear `file_path` disambiguation message when multiple loaded assemblies share the same internal name
+
+---
+
 ## v1.8.28 — 2026-04-07
 
 ### Fixed: debugger pause/session stability
