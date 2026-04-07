@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.30] - 2026-04-07
+
+### Fixed
+- `update_method_sourcecode` now skips compiler-generated event-backing fields when building the wrapper type, avoiding duplicate member declarations such as field/event pairs with the same name.
+- .NET Framework reference-pack collection now filters out native/non-managed DLLs from the framework directory before handing them to Roslyn, preventing `CS0009`/`CS1509` failures from unmanaged files in `v4.0.30319`.
+
 ## [1.8.29] - 2026-04-07
 
 ### Fixed

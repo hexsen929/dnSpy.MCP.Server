@@ -2,6 +2,15 @@
 
 ---
 
+## v1.8.30 — 2026-04-07
+
+### Fixed: .NET Framework wrapper/reference edge cases
+
+- `update_method_sourcecode` now skips event-backing fields when generating the wrapper type, preventing duplicate member declarations on normal C# events
+- .NET Framework reference discovery now filters unmanaged/native DLLs out of the `v4.0.30319` fallback directory before creating Roslyn metadata references
+
+---
+
 ## v1.8.29 — 2026-04-07
 
 ### Fixed: source patch compilation and save disambiguation

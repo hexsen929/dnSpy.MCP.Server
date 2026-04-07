@@ -326,8 +326,11 @@ namespace dnSpy.MCP.Server.Application {
 			var namespaceClose = string.IsNullOrWhiteSpace(type.Namespace) ? string.Empty : "}\n";
 			var indent = string.IsNullOrWhiteSpace(type.Namespace) ? string.Empty : "\t";
 			var members = new List<string>();
+			var eventNames = new HashSet<string>(type.Events.Select(evt => evt.Name.String), StringComparer.Ordinal);
 
 			foreach (var field in type.Fields) {
+				if (eventNames.Contains(field.Name.String))
+					continue;
 				var declaration = BuildFieldDeclaration(field, method);
 				if (!string.IsNullOrWhiteSpace(declaration))
 					members.Add(IndentBlock(declaration!, indent + "\t"));
@@ -765,9 +768,28 @@ $@"public{(accessor.IsStatic ? " static" : string.Empty)} event {ToCSharpTypeNam
 					continue;
 
 				foreach (var file in Directory.GetFiles(directory, "*.dll"))
-					paths.Add(file);
+				{
+					if (IsManagedAssemblyFile(file))
+						paths.Add(file);
+				}
 				if (paths.Count > 0)
 					return;
+			}
+		}
+
+		static bool IsManagedAssemblyFile(string path) {
+			try {
+				System.Reflection.AssemblyName.GetAssemblyName(path);
+				return true;
+			}
+			catch (BadImageFormatException) {
+				return false;
+			}
+			catch (FileLoadException) {
+				return false;
+			}
+			catch (IOException) {
+				return false;
 			}
 		}
 
