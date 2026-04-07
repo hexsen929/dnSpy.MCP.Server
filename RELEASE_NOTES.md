@@ -2,6 +2,14 @@
 
 ---
 
+## v1.8.35 — 2026-04-07
+
+### Fixed: AssemblyRef visibility/removal for type-forwarder anchors
+
+- `list_assembly_references` and `remove_assembly_reference` now see `AssemblyRef` entries that are only referenced by `ExportedType` type-forwarders, keeping them consistent with `add_assembly_reference`
+
+---
+
 ## v1.8.34 — 2026-04-07
 
 ### Fixed: add_resource assembly resolution

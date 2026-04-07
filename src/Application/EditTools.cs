@@ -845,7 +845,7 @@ namespace dnSpy.MCP.Server.Application {
 			throw new ArgumentException($"Assembly not found: {asmNameObj}");
 
 		var module = assembly.ManifestModule;
-		var refs = module.GetAssemblyRefs().Select((r, i) => new {
+		var refs = GetReferencedAssemblyRefs(module).Select((r, i) => new {
 			Index = i,
 			Name = r.Name.String,
 			Version = r.Version?.ToString() ?? "0.0.0.0",
@@ -1176,7 +1176,7 @@ namespace dnSpy.MCP.Server.Application {
 		var module = assembly.ManifestModule;
 		var refName = refNameObj.ToString() ?? "";
 
-		var asmRef = module.GetAssemblyRefs().FirstOrDefault(r =>
+		var asmRef = GetReferencedAssemblyRefs(module).FirstOrDefault(r =>
 			string.Equals(r.Name.String, refName, StringComparison.OrdinalIgnoreCase))
 			?? throw new ArgumentException($"Assembly reference not found: '{refName}'. Use list_assembly_references to see available references.");
 
@@ -1834,6 +1834,31 @@ namespace dnSpy.MCP.Server.Application {
 			if (!allowGenericFilePath)
 				return null;
 			return arguments.TryGetValue("file_path", out var fpObj) ? fpObj?.ToString() : null;
+		}
+
+		static List<AssemblyRef> GetReferencedAssemblyRefs(ModuleDef module) {
+			var refs = new List<AssemblyRef>();
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+			void AddRef(IAssembly? asm) {
+				if (asm is not AssemblyRef assemblyRef)
+					return;
+				var key = assemblyRef.FullName;
+				if (string.IsNullOrWhiteSpace(key))
+					key = assemblyRef.Name.String ?? string.Empty;
+				if (seen.Add(key))
+					refs.Add(assemblyRef);
+			}
+
+			foreach (var assemblyRef in module.GetAssemblyRefs())
+				AddRef(assemblyRef);
+
+			foreach (var exportedType in module.ExportedTypes) {
+				if (exportedType.Implementation is AssemblyRef assemblyRef)
+					AddRef(assemblyRef);
+			}
+
+			return refs;
 		}
 
 		AssemblyDef? FindAssemblyByName(string name, string? filePath = null) {
