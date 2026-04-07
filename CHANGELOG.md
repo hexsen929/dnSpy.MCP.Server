@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.32] - 2026-04-07
+
+### Fixed
+- `start_debugging` now validates `break_kind` against the supported dnSpy values instead of silently passing unknown strings through, while keeping `CreateProcess` available and surfacing an explicit warning that it may pause before a usable managed thread/frame exists.
+- `continue_debugger` now reports `already running / still initializing` when no paused process exists, instead of falsely claiming a resume happened.
+- `break_debugger` now short-circuits when a paused process is already available, avoiding an unnecessary extra `BreakAll()` round-trip.
+- `start_debugging` and `attach_to_process` now report whether the initial probe could already see a paused process/thread/frame, which makes early debugger-state diagnosis easier on unstable hosts.
+
 ## [1.8.31] - 2026-04-07
 
 ### Fixed

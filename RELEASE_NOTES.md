@@ -2,6 +2,17 @@
 
 ---
 
+## v1.8.32 — 2026-04-07
+
+### Fixed: debugger entry/resume semantics
+
+- `start_debugging` now validates `break_kind` against the supported dnSpy values and preserves `CreateProcess` support with an explicit warning that it can pause before dnSpy publishes a usable managed thread/frame
+- `continue_debugger` now returns `already running / still initializing` when no paused process exists, instead of claiming a resume happened
+- `break_debugger` now reuses an already-paused process instead of issuing another `BreakAll()`
+- `start_debugging` and `attach_to_process` now include the immediately observed paused process/thread/frame visibility in their response payloads for faster triage
+
+---
+
 ## v1.8.31 — 2026-04-07
 
 ### Fixed: debugger transition races

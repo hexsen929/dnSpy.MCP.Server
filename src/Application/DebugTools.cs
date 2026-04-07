@@ -54,6 +54,12 @@ namespace dnSpy.MCP.Server.Application {
 		readonly IDsDocumentService documentService;
 		readonly Lazy<AttachableProcessesService> attachableProcessesService;
 		readonly Lazy<DbgExceptionSettingsService> exceptionSettingsService;
+		static readonly string[] SupportedBreakKinds = new[] {
+			PredefinedBreakKinds.DontBreak,
+			PredefinedBreakKinds.CreateProcess,
+			PredefinedBreakKinds.ModuleCctorOrEntryPoint,
+			PredefinedBreakKinds.EntryPoint,
+		};
 		string? lastDebugTargetPath;
 
 		[ImportingConstructor]
@@ -401,6 +407,19 @@ namespace dnSpy.MCP.Server.Application {
 				var snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
 				if (!snapshot.IsDebugging || snapshot.ProcessCount == 0)
 					throw new InvalidOperationException("No active debug session.");
+				var pausedBefore = snapshot.Processes
+					.Where(p => string.Equals(p.State, DbgProcessState.Paused.ToString(), StringComparison.OrdinalIgnoreCase))
+					.ToList();
+				if (pausedBefore.Count == 0) {
+					var alreadyRunning = JsonSerializer.Serialize(new {
+						Resumed = false,
+						ProcessCount = snapshot.ProcessCount,
+						Note = "No paused process is currently available. The debugger is already running or still initializing."
+					}, new JsonSerializerOptions { WriteIndented = true });
+					return new CallToolResult {
+						Content = new List<ToolContent> { new ToolContent { Text = alreadyRunning } }
+					};
+				}
 				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.RunAll());
 
 				var deadline = DateTime.UtcNow.AddSeconds(2);
@@ -414,7 +433,12 @@ namespace dnSpy.MCP.Server.Application {
 					}
 					if (!snapshot.Processes.Any(p => string.Equals(p.State, DbgProcessState.Paused.ToString(), StringComparison.OrdinalIgnoreCase))) {
 						return new CallToolResult {
-							Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed (RunAll called)." } }
+							Content = new List<ToolContent> { new ToolContent { Text = JsonSerializer.Serialize(new {
+								Resumed = true,
+								ProcessCount = snapshot.ProcessCount,
+								PreviouslyPausedProcessCount = pausedBefore.Count,
+								Note = "Debugger resumed (RunAll called)."
+							}, new JsonSerializerOptions { WriteIndented = true }) } }
 						};
 					}
 					Thread.Sleep(100);
@@ -450,6 +474,22 @@ namespace dnSpy.MCP.Server.Application {
 						safePause = spElem.GetBoolean();
 					else if (bool.TryParse(spObj?.ToString(), out var parsed))
 						safePause = parsed;
+				}
+
+				var alreadyPaused = DebuggerDispatcherHelper.CapturePausedSelection(dbgManager.Value, requireFrame: false);
+				if (alreadyPaused.IsDebugging && alreadyPaused.ProcessId.HasValue && alreadyPaused.ProcessIsPaused) {
+					var pausedJson = JsonSerializer.Serialize(new {
+						Success = true,
+						AlreadyPaused = true,
+						ProcessId = alreadyPaused.ProcessId,
+						ThreadCount = alreadyPaused.ThreadCount,
+						ThreadId = alreadyPaused.ThreadId,
+						HasStackFrame = alreadyPaused.HasStackFrame,
+						Note = "A paused process is already available. Skipping BreakAll()."
+					}, new JsonSerializerOptions { WriteIndented = true });
+					return new CallToolResult {
+						Content = new List<ToolContent> { new ToolContent { Text = pausedJson } }
+					};
 				}
 
 				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.BreakAll());
@@ -633,6 +673,9 @@ namespace dnSpy.MCP.Server.Application {
 			string breakKind = PredefinedBreakKinds.EntryPoint;
 			if (arguments.TryGetValue("break_kind", out var bkObj) && bkObj?.ToString() is string bkStr && !string.IsNullOrEmpty(bkStr))
 				breakKind = bkStr;
+			breakKind = NormalizeBreakKind(breakKind)
+				?? throw new ArgumentException(
+					$"Unsupported break_kind '{breakKind}'. Supported values: {string.Join(", ", SupportedBreakKinds)}.");
 
 			var opts = new DotNetFrameworkStartDebuggingOptions {
 				Filename         = exePath,
@@ -658,12 +701,18 @@ namespace dnSpy.MCP.Server.Application {
 					Thread.Sleep(100);
 				} while (DateTime.UtcNow < deadline);
 			}
+			var pausedSelection = sessionCreated
+				? DebuggerDispatcherHelper.CapturePausedSelection(dbgManager.Value, requireFrame: false)
+				: null;
 
 			var startNote = error == null
 				? (sessionCreated
 					? "Debug session created. Use get_debugger_state / wait_for_pause to observe pause state."
 					: "Start request was accepted, but no debug session became visible within 3 seconds. The process may have exited immediately, failed before entry, or is still initializing.")
 				: null;
+			var breakKindNote = GetBreakKindDiagnosticNote(breakKind);
+			if (!string.IsNullOrWhiteSpace(breakKindNote))
+				startNote = string.IsNullOrWhiteSpace(startNote) ? breakKindNote : startNote + " " + breakKindNote;
 			var archNote = GetArchitectureDiagnosticNote(exePath);
 			if (!string.IsNullOrWhiteSpace(archNote))
 				startNote = string.IsNullOrWhiteSpace(startNote) ? archNote : startNote + " " + archNote;
@@ -672,6 +721,10 @@ namespace dnSpy.MCP.Server.Application {
 				Started = error == null,
 				SessionCreated = sessionCreated,
 				ProcessCount = processCount,
+				PausedProcessId = pausedSelection?.ProcessId,
+				PausedThreadVisible = pausedSelection?.ThreadId != null,
+				PausedThreadCount = pausedSelection?.ThreadCount,
+				PausedStackFrameVisible = pausedSelection?.HasStackFrame,
 				ExePath = exePath,
 				BreakKind = breakKind,
 				Error = error,
@@ -730,14 +783,22 @@ namespace dnSpy.MCP.Server.Application {
 				}
 				Thread.Sleep(100);
 			} while (DateTime.UtcNow < deadline);
+			var pausedSelection = sessionCreated
+				? DebuggerDispatcherHelper.CapturePausedSelection(dbgManager.Value, requireFrame: false)
+				: null;
 
 			var result = JsonSerializer.Serialize(new {
 				Attached    = true,
+				AttachRequested = true,
 				ProcessId   = pid,
 				RuntimeName = target.RuntimeName,
 				Name        = target.Name,
 				SessionCreated = sessionCreated,
 				ProcessCount = processCount,
+				PausedProcessId = pausedSelection?.ProcessId,
+				PausedThreadVisible = pausedSelection?.ThreadId != null,
+				PausedThreadCount = pausedSelection?.ThreadCount,
+				PausedStackFrameVisible = pausedSelection?.HasStackFrame,
 				Note        = sessionCreated
 					? "Attach completed and a debug session became visible."
 					: "Attach was requested, but no debug session became visible within 3 seconds. Retry get_debugger_state."
@@ -1024,6 +1085,22 @@ namespace dnSpy.MCP.Server.Application {
 			return null;
 
 		return $"Host OS architecture is ARM64 and target '{System.IO.Path.GetFileName(targetPath)}' is {targetArch}. dnSpy's managed debugger can be unstable there for x86/x64/AnyCPU .NET Framework targets under emulation; prefer an x64 Windows VM for reliable stepping/breaks.";
+	}
+
+	static string? NormalizeBreakKind(string? breakKind) {
+		foreach (var supported in SupportedBreakKinds) {
+			if (string.Equals(breakKind, supported, StringComparison.OrdinalIgnoreCase))
+				return supported;
+		}
+		return null;
+	}
+
+	static string? GetBreakKindDiagnosticNote(string breakKind) {
+		if (breakKind == PredefinedBreakKinds.CreateProcess) {
+			return "break_kind=CreateProcess can pause before dnSpy has published a managed thread or stack frame. " +
+				"If stepping/location tools fail there, retry wait_for_pause(require_stack_frame=false) or use EntryPoint / ModuleCctorOrEntryPoint for managed IL debugging.";
+		}
+		return null;
 	}
 
 	static string? TryDescribeManagedImageArchitecture(string path) {
