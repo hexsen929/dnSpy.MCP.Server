@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `wait_for_pause` now waits for a usable paused stack frame by default, distinguishes `paused process without threads`, `thread exists without a stack frame`, and `session ended while waiting`, and supports optional `process_id` / `require_stack_frame` filters.
 - `break_debugger` and `continue_debugger` now verify the post-call debugger state instead of returning immediate success before the engine finishes transitioning.
 - `get_local_variables` and `eval_expression` no longer use a stale pre-dispatch `DbgManager.IsDebugging` check, reducing false `Debugger is not active` failures during pause-state transitions.
+- debugger transition failures now include the last observed process state and, on Windows ARM64 hosts, a warning when the target is an emulated x86/x64/AnyCPU .NET Framework process.
 
 ## [1.8.30] - 2026-04-07
 

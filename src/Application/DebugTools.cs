@@ -21,9 +21,11 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using dnlib.DotNet;
+using dnlib.PE;
 using dnSpy.Contracts.Debugger;
 using dnSpy.Contracts.Debugger.Attach;
 using dnSpy.Contracts.Debugger.Breakpoints.Code;
@@ -52,6 +54,7 @@ namespace dnSpy.MCP.Server.Application {
 		readonly IDsDocumentService documentService;
 		readonly Lazy<AttachableProcessesService> attachableProcessesService;
 		readonly Lazy<DbgExceptionSettingsService> exceptionSettingsService;
+		string? lastDebugTargetPath;
 
 		[ImportingConstructor]
 		public DebugTools(
@@ -405,7 +408,8 @@ namespace dnSpy.MCP.Server.Application {
 					snapshot = DebuggerDispatcherHelper.CaptureState(dbgManager.Value);
 					if (!snapshot.IsDebugging || snapshot.ProcessCount == 0) {
 						return new CallToolResult {
-							Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed, and the debug session ended." } }
+							Content = new List<ToolContent> { new ToolContent { Text = BuildSessionEndedMessage("Continue", snapshot) } },
+							IsError = true
 						};
 					}
 					if (!snapshot.Processes.Any(p => string.Equals(p.State, DbgProcessState.Paused.ToString(), StringComparison.OrdinalIgnoreCase))) {
@@ -454,7 +458,7 @@ namespace dnSpy.MCP.Server.Application {
 				while (DateTime.UtcNow < deadline) {
 					paused = DebuggerDispatcherHelper.CapturePausedSelection(dbgManager.Value, requireFrame: false);
 					if (!paused.IsDebugging)
-						throw new InvalidOperationException("The debug session ended while trying to pause the debugger.");
+						throw new InvalidOperationException(BuildSessionEndedMessage("Break", DebuggerDispatcherHelper.CaptureState(dbgManager.Value)));
 					if (paused.ProcessId.HasValue && paused.ProcessIsPaused)
 						break;
 					Thread.Sleep(100);
@@ -522,11 +526,27 @@ namespace dnSpy.MCP.Server.Application {
 		/// </summary>
 		public CallToolResult GetCallStack() {
 			try {
+				var mgr = dbgManager.Value;
+				var waitResult = DebuggerDispatcherHelper.WaitForPausedSelection(
+					mgr,
+					requireFrame: true,
+					timeout: TimeSpan.FromSeconds(1));
+
 				return DebuggerDispatcherHelper.Invoke(() => {
-					var mgr = dbgManager.Value;
+					if (waitResult.SessionEnded) {
+						return new CallToolResult {
+							Content = new List<ToolContent> { new ToolContent { Text = BuildSessionEndedMessage("Call stack lookup", waitResult.LastActiveState) } },
+							IsError = true
+						};
+					}
 					if (!mgr.IsDebugging) {
 						return new CallToolResult {
 							Content = new List<ToolContent> { new ToolContent { Text = "Debugger is not active. Start debugging first." } }
+						};
+					}
+					if (waitResult.TimedOut || waitResult.NoActiveSession) {
+						return new CallToolResult {
+							Content = new List<ToolContent> { new ToolContent { Text = DescribePausedThreadUnavailable(waitResult.LastPauseSelection, null) } }
 						};
 					}
 
@@ -598,6 +618,7 @@ namespace dnSpy.MCP.Server.Application {
 			var exePath = exePathObj.ToString() ?? string.Empty;
 			if (!System.IO.File.Exists(exePath))
 				throw new ArgumentException($"File not found: {exePath}");
+			lastDebugTargetPath = exePath;
 
 			string? commandLine = null;
 			if (arguments.TryGetValue("arguments", out var argsObj))
@@ -638,6 +659,15 @@ namespace dnSpy.MCP.Server.Application {
 				} while (DateTime.UtcNow < deadline);
 			}
 
+			var startNote = error == null
+				? (sessionCreated
+					? "Debug session created. Use get_debugger_state / wait_for_pause to observe pause state."
+					: "Start request was accepted, but no debug session became visible within 3 seconds. The process may have exited immediately, failed before entry, or is still initializing.")
+				: null;
+			var archNote = GetArchitectureDiagnosticNote(exePath);
+			if (!string.IsNullOrWhiteSpace(archNote))
+				startNote = string.IsNullOrWhiteSpace(startNote) ? archNote : startNote + " " + archNote;
+
 			var result = JsonSerializer.Serialize(new {
 				Started = error == null,
 				SessionCreated = sessionCreated,
@@ -645,11 +675,7 @@ namespace dnSpy.MCP.Server.Application {
 				ExePath = exePath,
 				BreakKind = breakKind,
 				Error = error,
-				Note = error == null
-					? (sessionCreated
-						? "Debug session created. Use get_debugger_state / wait_for_pause to observe pause state."
-						: "Start request was accepted, but no debug session became visible within 3 seconds. The process may have exited immediately, failed before entry, or is still initializing.")
-					: null
+				Note = startNote
 			}, new JsonSerializerOptions {
 				WriteIndented = true,
 				DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
@@ -689,6 +715,7 @@ namespace dnSpy.MCP.Server.Application {
 
 			// Attach to the first matching entry (each entry represents one CLR runtime in the process)
 			var target = processes[0];
+			lastDebugTargetPath = TryGetProcessImagePath(pid);
 			DebuggerDispatcherHelper.Invoke(() => target.Attach());
 
 			bool sessionCreated = false;
@@ -751,8 +778,21 @@ namespace dnSpy.MCP.Server.Application {
 	/// Arguments: thread_id (optional), process_id (optional)
 	/// </summary>
 	public CallToolResult GetCurrentLocation(Dictionary<string, object>? arguments) {
+		var mgr = dbgManager.Value;
+		var processId = ParseOptionalUInt32(arguments, "process_id");
+		var waitResult = DebuggerDispatcherHelper.WaitForPausedSelection(
+			mgr,
+			processId: processId,
+			requireFrame: true,
+			timeout: TimeSpan.FromSeconds(1));
+		if (waitResult.NoActiveSession)
+			throw new InvalidOperationException("No active debug session.");
+		if (waitResult.SessionEnded)
+			throw new InvalidOperationException(BuildSessionEndedMessage("Current location lookup", waitResult.LastActiveState));
+		if (waitResult.TimedOut)
+			throw new InvalidOperationException(DescribePausedThreadUnavailable(waitResult.LastPauseSelection, processId));
+
 		return DebuggerDispatcherHelper.Invoke(() => {
-			var mgr = dbgManager.Value;
 			if (!mgr.IsDebugging)
 				throw new InvalidOperationException("No active debug session.");
 
@@ -791,10 +831,6 @@ namespace dnSpy.MCP.Server.Application {
 	/// </summary>
 	public CallToolResult WaitForPause(Dictionary<string, object>? arguments) {
 		var mgr = dbgManager.Value;
-		var initial = DebuggerDispatcherHelper.CaptureState(mgr);
-		if (!initial.IsDebugging)
-			throw new InvalidOperationException("No active debug session.");
-
 		int timeoutSeconds = 30;
 		if (arguments != null && arguments.TryGetValue("timeout_seconds", out var tso)) {
 			if (tso is JsonElement je && je.TryGetInt32(out var ti)) timeoutSeconds = Math.Max(1, ti);
@@ -810,41 +846,29 @@ namespace dnSpy.MCP.Server.Application {
 				requireStackFrame = ParseOptionalBool(rf) ?? true;
 		}
 
-		var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
-		DebuggerPauseSnapshot? lastObserved = null;
-		while (DateTime.UtcNow < deadline) {
-			var paused = DebuggerDispatcherHelper.CapturePausedSelection(mgr, processId: processId, requireFrame: requireStackFrame);
-			lastObserved = paused;
-			if (!paused.IsDebugging)
-				throw new InvalidOperationException("The debug session ended before a paused thread became available.");
+		var waitResult = DebuggerDispatcherHelper.WaitForPausedSelection(
+			mgr,
+			processId: processId,
+			requireFrame: requireStackFrame,
+			timeout: TimeSpan.FromSeconds(timeoutSeconds));
+		if (waitResult.NoActiveSession)
+			throw new InvalidOperationException("No active debug session.");
+		if (waitResult.SessionEnded)
+			throw new InvalidOperationException(BuildSessionEndedMessage("wait_for_pause", waitResult.LastActiveState));
+		if (waitResult.TimedOut)
+			throw new TimeoutException($"Debugger did not pause within {timeoutSeconds}s. {DescribePausedThreadUnavailable(waitResult.LastPauseSelection, processId)}");
 
-			if (paused.ProcessId.HasValue && paused.ProcessIsPaused && paused.ThreadId.HasValue && (!requireStackFrame || paused.HasStackFrame)) {
-				var json = JsonSerializer.Serialize(new {
-					Paused      = true,
-					ProcessId   = paused.ProcessId.Value,
-					ThreadCount = paused.ThreadCount,
-					ThreadId    = paused.ThreadId.Value,
-					HasStackFrame = paused.HasStackFrame
-				}, new JsonSerializerOptions { WriteIndented = true });
-				return new CallToolResult {
-					Content = new List<ToolContent> { new ToolContent { Text = json } }
-				};
-			}
-			Thread.Sleep(100);
-		}
-
-		if (lastObserved != null && lastObserved.ProcessId.HasValue) {
-			if (!lastObserved.ProcessIsPaused)
-				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} did not reach a paused state within {timeoutSeconds}s.");
-			if (lastObserved.ThreadCount == 0)
-				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} paused, but no debug threads became available within {timeoutSeconds}s.");
-			if (!lastObserved.ThreadId.HasValue)
-				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} paused, but dnSpy did not publish a paused thread within {timeoutSeconds}s.");
-			if (requireStackFrame && !lastObserved.HasStackFrame)
-				throw new TimeoutException($"Process {lastObserved.ProcessId.Value} paused and thread {lastObserved.ThreadId.Value} exists, but dnSpy did not publish a usable stack frame within {timeoutSeconds}s.");
-		}
-
-		throw new TimeoutException($"Debugger did not pause within {timeoutSeconds}s.");
+		var paused = waitResult.LastPauseSelection ?? throw new InvalidOperationException("No paused-thread result was captured.");
+		var json = JsonSerializer.Serialize(new {
+			Paused      = true,
+			ProcessId   = paused.ProcessId!.Value,
+			ThreadCount = paused.ThreadCount,
+			ThreadId    = paused.ThreadId!.Value,
+			HasStackFrame = paused.HasStackFrame
+		}, new JsonSerializerOptions { WriteIndented = true });
+		return new CallToolResult {
+			Content = new List<ToolContent> { new ToolContent { Text = json } }
+		};
 	}
 
 	// ── Private stepping helpers ──────────────────────────────────────────────
@@ -861,6 +885,18 @@ namespace dnSpy.MCP.Server.Application {
 		var mre = new ManualResetEventSlim(false);
 		string? stepError = null;
 		object? frameInfo = null;
+		var processId = ParseOptionalUInt32(arguments, "process_id");
+		var waitResult = DebuggerDispatcherHelper.WaitForPausedSelection(
+			mgr,
+			processId: processId,
+			requireFrame: true,
+			timeout: TimeSpan.FromSeconds(1));
+		if (waitResult.NoActiveSession)
+			throw new InvalidOperationException("No active debug session. Use start_debugging or attach_to_process first.");
+		if (waitResult.SessionEnded)
+			throw new InvalidOperationException(BuildSessionEndedMessage("Step", waitResult.LastActiveState));
+		if (waitResult.TimedOut)
+			throw new InvalidOperationException(DescribePausedThreadUnavailable(waitResult.LastPauseSelection, processId));
 
 		DebuggerDispatcherHelper.Invoke(() => {
 			if (!mgr.IsDebugging)
@@ -915,12 +951,7 @@ namespace dnSpy.MCP.Server.Application {
 					"or a dialog may be blocking the debugger. " +
 					"Check get_debugger_state and list_dialogs.");
 			if (!DebuggerDispatcherHelper.CaptureState(mgr).IsDebugging)
-				throw new InvalidOperationException(
-					"The debug session ended while waiting for the step to complete. " +
-					"The process likely crashed due to an unhandled exception (e.g. Anti-Tamper protection " +
-					"detected a patched binary and caused an AccessViolationException in the module .cctor). " +
-					"To bypass Anti-Tamper: use unpack_from_memory (break_kind=EntryPoint) BEFORE patching, " +
-					"or neutralize the Anti-Tamper .cctor with patch_method_to_ret before saving.");
+				throw new InvalidOperationException(BuildSessionEndedMessage("Step", waitResult.LastActiveState));
 		}
 
 		if (stepError != null)
@@ -937,6 +968,83 @@ namespace dnSpy.MCP.Server.Application {
 		return new CallToolResult {
 			Content = new List<ToolContent> { new ToolContent { Text = json } }
 		};
+	}
+
+	string DescribePausedThreadUnavailable(DebuggerPauseSnapshot? pausedSelection, uint? processId) {
+		if (pausedSelection == null || !pausedSelection.ProcessId.HasValue) {
+			return processId.HasValue
+				? $"No paused thread became available in process {processId.Value}."
+				: "No paused thread became available.";
+		}
+
+		if (pausedSelection.ProcessIsPaused) {
+			return pausedSelection.ThreadCount == 0
+				? $"Process {pausedSelection.ProcessId.Value} is paused but dnSpy is currently publishing 0 threads."
+				: $"Process {pausedSelection.ProcessId.Value} is paused, but no usable stack frame is available yet.";
+		}
+
+		return $"Process {pausedSelection.ProcessId.Value} is not paused.";
+	}
+
+	string BuildSessionEndedMessage(string operation, DebuggerStateSnapshot? lastActiveState) {
+		var details = new List<string> {
+			$"{operation} failed because the debug session ended before a usable paused thread became available."
+		};
+
+		if (lastActiveState != null && lastActiveState.ProcessCount > 0) {
+			var processes = string.Join(", ", lastActiveState.Processes.Select(p =>
+				$"pid={p.Id} state={p.State} threads={p.ThreadCount}"));
+			details.Add("Last active state: " + processes + ".");
+		}
+
+		var archNote = GetArchitectureDiagnosticNote(lastDebugTargetPath);
+		if (!string.IsNullOrWhiteSpace(archNote))
+			details.Add(archNote!);
+
+		return string.Join(" ", details);
+	}
+
+	static string? TryGetProcessImagePath(int pid) {
+		try {
+			return System.Diagnostics.Process.GetProcessById(pid).MainModule?.FileName;
+		}
+		catch {
+			return null;
+		}
+	}
+
+	static string? GetArchitectureDiagnosticNote(string? targetPath) {
+		if (RuntimeInformation.OSArchitecture != Architecture.Arm64)
+			return null;
+		if (string.IsNullOrWhiteSpace(targetPath) || !System.IO.File.Exists(targetPath))
+			return "Host OS architecture is ARM64. dnSpy's managed debugger can be unstable there for x86/x64 .NET Framework targets under emulation.";
+
+		var targetArch = TryDescribeManagedImageArchitecture(targetPath!);
+		if (string.IsNullOrWhiteSpace(targetArch) || string.Equals(targetArch, "arm64", StringComparison.OrdinalIgnoreCase))
+			return null;
+
+		return $"Host OS architecture is ARM64 and target '{System.IO.Path.GetFileName(targetPath)}' is {targetArch}. dnSpy's managed debugger can be unstable there for x86/x64/AnyCPU .NET Framework targets under emulation; prefer an x64 Windows VM for reliable stepping/breaks.";
+	}
+
+	static string? TryDescribeManagedImageArchitecture(string path) {
+		try {
+			using var module = ModuleDefMD.Load(path);
+			if (module.Machine == Machine.ARM64)
+				return "arm64";
+			if (module.Machine == Machine.AMD64)
+				return "x64";
+			if (module.Machine == Machine.I386) {
+				if (module.Is32BitRequired)
+					return "x86";
+				if (module.Is32BitPreferred)
+					return "anycpu-prefer32";
+				return "anycpu";
+			}
+			return module.Machine.ToString();
+		}
+		catch {
+			return null;
+		}
 	}
 
 	DebuggerSelection ResolveThreadSelectionCore(

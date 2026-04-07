@@ -39,6 +39,76 @@ namespace dnSpy.MCP.Server.Helper {
 			bool requireFrame = false) =>
 			Invoke(() => CapturePausedSelectionCore(mgr, processId, requireFrame));
 
+		public static DebuggerPauseWaitResult WaitForPausedSelection(
+			DbgManager mgr,
+			uint? processId = null,
+			bool requireFrame = false,
+			TimeSpan? timeout = null,
+			TimeSpan? inactiveGrace = null) {
+			if (mgr == null)
+				throw new ArgumentNullException(nameof(mgr));
+
+			var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(1));
+			var grace = inactiveGrace ?? TimeSpan.FromMilliseconds(750);
+			DateTime? noSessionSince = null;
+			DateTime? sessionEndedSince = null;
+			DebuggerStateSnapshot? lastActiveState = null;
+			DebuggerPauseSnapshot? lastPausedSelection = null;
+
+			while (DateTime.UtcNow < deadline) {
+				var state = CaptureState(mgr);
+				if (!state.IsDebugging) {
+					if (lastActiveState == null) {
+						noSessionSince ??= DateTime.UtcNow;
+						if (DateTime.UtcNow - noSessionSince.Value >= grace) {
+							return new DebuggerPauseWaitResult {
+								NoActiveSession = true,
+								LastState = state
+							};
+						}
+					}
+					else {
+						sessionEndedSince ??= DateTime.UtcNow;
+						if (DateTime.UtcNow - sessionEndedSince.Value >= grace) {
+							return new DebuggerPauseWaitResult {
+								SessionEnded = true,
+								LastState = state,
+								LastActiveState = lastActiveState,
+								LastPauseSelection = lastPausedSelection
+							};
+						}
+					}
+
+					System.Threading.Thread.Sleep(100);
+					continue;
+				}
+
+				noSessionSince = null;
+				sessionEndedSince = null;
+				lastActiveState = state;
+
+				var paused = CapturePausedSelection(mgr, processId, requireFrame);
+				lastPausedSelection = paused;
+				if (paused.ProcessId.HasValue && paused.ThreadId.HasValue && (!requireFrame || paused.HasStackFrame)) {
+					return new DebuggerPauseWaitResult {
+						Succeeded = true,
+						LastState = state,
+						LastActiveState = state,
+						LastPauseSelection = paused
+					};
+				}
+
+				System.Threading.Thread.Sleep(100);
+			}
+
+			return new DebuggerPauseWaitResult {
+				TimedOut = true,
+				LastState = CaptureState(mgr),
+				LastActiveState = lastActiveState,
+				LastPauseSelection = lastPausedSelection
+			};
+		}
+
 		public static DebuggerStateSnapshot CaptureStateCore(DbgManager mgr) {
 			if (mgr == null)
 				throw new ArgumentNullException(nameof(mgr));
@@ -276,6 +346,16 @@ namespace dnSpy.MCP.Server.Helper {
 		public int ThreadCount { get; set; }
 		public int? ThreadId { get; set; }
 		public bool HasStackFrame { get; set; }
+	}
+
+	sealed class DebuggerPauseWaitResult {
+		public bool Succeeded { get; set; }
+		public bool NoActiveSession { get; set; }
+		public bool SessionEnded { get; set; }
+		public bool TimedOut { get; set; }
+		public DebuggerStateSnapshot? LastState { get; set; }
+		public DebuggerStateSnapshot? LastActiveState { get; set; }
+		public DebuggerPauseSnapshot? LastPauseSelection { get; set; }
 	}
 
 	sealed class DebuggerProcessSnapshot {

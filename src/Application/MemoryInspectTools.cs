@@ -75,6 +75,20 @@ namespace dnSpy.MCP.Server.Application {
 				else if (int.TryParse(pidObj?.ToString(), out var pidInt2))
 					filterPid = pidInt2;
 			}
+			var waitResult = DebuggerDispatcherHelper.WaitForPausedSelection(
+				mgr,
+				processId: filterPid.HasValue ? (uint?)filterPid.Value : null,
+				requireFrame: true,
+				timeout: TimeSpan.FromSeconds(1));
+			if (waitResult.NoActiveSession)
+				throw new InvalidOperationException("Debugger is not active. Start a debug session first.");
+			if (waitResult.SessionEnded)
+				throw new InvalidOperationException("The debug session ended before a paused frame became available.");
+			if (waitResult.TimedOut)
+				throw new InvalidOperationException(
+					waitResult.LastPauseSelection?.ThreadCount == 0
+						? "No threads found in the paused process."
+						: "The paused process has threads, but dnSpy has not published a usable stack frame yet.");
 
 			// All evaluation must happen on the UI/debugger dispatcher thread
 			return DebuggerDispatcherHelper.Invoke(() => {
@@ -222,6 +236,20 @@ namespace dnSpy.MCP.Server.Application {
 			else if (int.TryParse(pidObj2?.ToString(), out var pidInt2))
 				filterPid = pidInt2;
 		}
+		var waitResult = DebuggerDispatcherHelper.WaitForPausedSelection(
+			mgr,
+			processId: filterPid.HasValue ? (uint?)filterPid.Value : null,
+			requireFrame: true,
+			timeout: TimeSpan.FromSeconds(1));
+		if (waitResult.NoActiveSession)
+			throw new InvalidOperationException("Debugger is not active. Start a debug session first.");
+		if (waitResult.SessionEnded)
+			throw new InvalidOperationException("The debug session ended before a paused frame became available.");
+		if (waitResult.TimedOut)
+			throw new InvalidOperationException(
+				waitResult.LastPauseSelection?.ThreadCount == 0
+					? "No threads found in the paused process."
+					: "The paused process has threads, but dnSpy has not published a usable stack frame yet.");
 
 		int funcEvalTimeout = 5;
 		if (arguments.TryGetValue("func_eval_timeout_seconds", out var tsoObj)) {
