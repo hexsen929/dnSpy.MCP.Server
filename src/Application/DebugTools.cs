@@ -411,13 +411,8 @@ namespace dnSpy.MCP.Server.Application {
 					.Where(p => string.Equals(p.State, DbgProcessState.Paused.ToString(), StringComparison.OrdinalIgnoreCase))
 					.ToList();
 				if (pausedBefore.Count == 0) {
-					var alreadyRunning = JsonSerializer.Serialize(new {
-						Resumed = false,
-						ProcessCount = snapshot.ProcessCount,
-						Note = "No paused process is currently available. The debugger is already running or still initializing."
-					}, new JsonSerializerOptions { WriteIndented = true });
 					return new CallToolResult {
-						Content = new List<ToolContent> { new ToolContent { Text = alreadyRunning } }
+						Content = new List<ToolContent> { new ToolContent { Text = "No paused process is currently available. The debugger is already running or still initializing." } }
 					};
 				}
 				DebuggerDispatcherHelper.Invoke(() => dbgManager.Value.RunAll());
@@ -433,12 +428,7 @@ namespace dnSpy.MCP.Server.Application {
 					}
 					if (!snapshot.Processes.Any(p => string.Equals(p.State, DbgProcessState.Paused.ToString(), StringComparison.OrdinalIgnoreCase))) {
 						return new CallToolResult {
-							Content = new List<ToolContent> { new ToolContent { Text = JsonSerializer.Serialize(new {
-								Resumed = true,
-								ProcessCount = snapshot.ProcessCount,
-								PreviouslyPausedProcessCount = pausedBefore.Count,
-								Note = "Debugger resumed (RunAll called)."
-							}, new JsonSerializerOptions { WriteIndented = true }) } }
+							Content = new List<ToolContent> { new ToolContent { Text = "Debugger resumed (RunAll called)." } }
 						};
 					}
 					Thread.Sleep(100);
